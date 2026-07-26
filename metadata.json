@@ -1,0 +1,6 @@
+{
+  "name": "LINE App",
+  "description": "LINEスタイルのリアルタイムメッセージング・スマフォWebアプリ（WebSocket通信・メッセージ保存・スタンプ・AI公式アカウント対応）",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
