@@ -1,8 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { Images, Plus, Trash2, X, Image as ImageIcon, Sparkles, FolderPlus } from 'lucide-react';
+import {
+  Images,
+  Plus,
+  Trash2,
+  X,
+  Image as ImageIcon,
+  Film,
+  FolderPlus,
+  Play,
+  Upload,
+  Video as VideoIcon,
+} from 'lucide-react';
 
-export interface AlbumPhoto {
+export type AlbumMediaType = 'photo' | 'video';
+
+export interface AlbumMedia {
   id: string;
+  type: AlbumMediaType;
   url: string;
   title: string;
   createdAt: string;
@@ -11,32 +25,35 @@ export interface AlbumPhoto {
 export interface Album {
   id: string;
   name: string;
-  photos: AlbumPhoto[];
+  items: AlbumMedia[];
   createdAt: string;
 }
 
 const INITIAL_ALBUMS: Album[] = [
   {
     id: 'album-1',
-    name: '思い出フォト',
+    name: '思い出のアルバム',
     createdAt: new Date().toISOString(),
-    photos: [
+    items: [
       {
         id: 'p-1',
+        type: 'photo',
         url: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&auto=format&fit=crop&q=80',
-        title: 'きれいな海辺',
+        title: 'きれいな海辺景色',
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: 'v-1',
+        type: 'video',
+        url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+        title: 'ドライブ動画',
         createdAt: new Date().toISOString(),
       },
       {
         id: 'p-2',
+        type: 'photo',
         url: 'https://images.unsplash.com/photo-1511920170033-f8396924c348?w=800&auto=format&fit=crop&q=80',
         title: 'お気に入りのカフェ',
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: 'p-3',
-        url: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=800&auto=format&fit=crop&q=80',
-        title: '山でのハイキング',
         createdAt: new Date().toISOString(),
       },
     ],
@@ -51,30 +68,52 @@ interface AlbumTabProps {
 export const AlbumTab: React.FC<AlbumTabProps> = ({ onOpenAuthModal, isLoggedIn }) => {
   const [albums, setAlbums] = useState<Album[]>(() => {
     try {
-      const saved = localStorage.getItem('line_app_albums');
-      return saved ? JSON.parse(saved) : INITIAL_ALBUMS;
+      const saved = localStorage.getItem('line_app_albums_v2');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return parsed;
+      }
+      // Migrate old format if exists
+      const oldSaved = localStorage.getItem('line_app_albums');
+      if (oldSaved) {
+        const oldParsed = JSON.parse(oldSaved);
+        return oldParsed.map((a: any) => ({
+          id: a.id,
+          name: a.name,
+          createdAt: a.createdAt,
+          items: (a.photos || []).map((p: any) => ({
+            id: p.id,
+            type: 'photo',
+            url: p.url,
+            title: p.title || '写真',
+            createdAt: p.createdAt,
+          })),
+        }));
+      }
+      return INITIAL_ALBUMS;
     } catch {
       return INITIAL_ALBUMS;
     }
   });
 
   const [activeAlbumId, setActiveAlbumId] = useState<string>(albums[0]?.id || 'album-1');
-  const [selectedPhoto, setSelectedPhoto] = useState<AlbumPhoto | null>(null);
+  const [selectedMedia, setSelectedMedia] = useState<AlbumMedia | null>(null);
 
   // Modal states
-  const [isAddPhotoOpen, setIsAddPhotoOpen] = useState(false);
+  const [isAddMediaOpen, setIsAddMediaOpen] = useState(false);
   const [isCreateAlbumOpen, setIsCreateAlbumOpen] = useState(false);
 
-  // New photo inputs
-  const [photoUrl, setPhotoUrl] = useState('');
-  const [photoTitle, setPhotoTitle] = useState('');
+  // New media inputs
+  const [mediaType, setMediaType] = useState<AlbumMediaType>('photo');
+  const [mediaUrl, setMediaUrl] = useState('');
+  const [mediaTitle, setMediaTitle] = useState('');
 
   // New album inputs
   const [newAlbumName, setNewAlbumName] = useState('');
 
   useEffect(() => {
     try {
-      localStorage.setItem('line_app_albums', JSON.stringify(albums));
+      localStorage.setItem('line_app_albums_v2', JSON.stringify(albums));
     } catch (e) {
       console.error('Failed to save albums to localStorage', e);
     }
@@ -89,7 +128,7 @@ export const AlbumTab: React.FC<AlbumTabProps> = ({ onOpenAuthModal, isLoggedIn 
     const newAlbum: Album = {
       id: `album-${Date.now()}`,
       name: newAlbumName.trim(),
-      photos: [],
+      items: [],
       createdAt: new Date().toISOString(),
     };
 
@@ -99,59 +138,67 @@ export const AlbumTab: React.FC<AlbumTabProps> = ({ onOpenAuthModal, isLoggedIn 
     setIsCreateAlbumOpen(false);
   };
 
-  const handleAddPhoto = (e: React.FormEvent) => {
+  const handleAddMedia = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!photoUrl.trim()) return;
+    if (!mediaUrl.trim()) return;
 
-    const newPhoto: AlbumPhoto = {
-      id: `photo-${Date.now()}`,
-      url: photoUrl.trim(),
-      title: photoTitle.trim() || '無題の写真',
+    const newItem: AlbumMedia = {
+      id: `media-${Date.now()}`,
+      type: mediaType,
+      url: mediaUrl.trim(),
+      title: mediaTitle.trim() || (mediaType === 'video' ? '無題の動画' : '無題の写真'),
       createdAt: new Date().toISOString(),
     };
 
     setAlbums((prev) =>
       prev.map((a) => {
         if (a.id === activeAlbumId) {
-          return { ...a, photos: [newPhoto, ...a.photos] };
+          return { ...a, items: [newItem, ...(a.items || [])] };
         }
         return a;
       })
     );
 
-    setPhotoUrl('');
-    setPhotoTitle('');
-    setIsAddPhotoOpen(false);
+    setMediaUrl('');
+    setMediaTitle('');
+    setIsAddMediaOpen(false);
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      const isVideo = file.type.startsWith('video');
+      setMediaType(isVideo ? 'video' : 'photo');
+      if (!mediaTitle.trim()) {
+        const nameWithoutExt = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+        setMediaTitle(nameWithoutExt);
+      }
+
       const reader = new FileReader();
       reader.onload = (event) => {
         if (event.target?.result) {
-          setPhotoUrl(event.target.result as string);
+          setMediaUrl(event.target.result as string);
         }
       };
       reader.readAsDataURL(file);
     }
   };
 
-  const handleDeletePhoto = (photoId: string, e: React.MouseEvent) => {
+  const handleDeleteMedia = (mediaId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm('この写真をアルバムから削除しますか？')) return;
+    if (!confirm('このメディアをアルバムから削除しますか？')) return;
 
     setAlbums((prev) =>
       prev.map((a) => {
         if (a.id === activeAlbumId) {
-          return { ...a, photos: a.photos.filter((p) => p.id !== photoId) };
+          return { ...a, items: a.items.filter((p) => p.id !== mediaId) };
         }
         return a;
       })
     );
 
-    if (selectedPhoto?.id === photoId) {
-      setSelectedPhoto(null);
+    if (selectedMedia?.id === mediaId) {
+      setSelectedMedia(null);
     }
   };
 
@@ -173,11 +220,11 @@ export const AlbumTab: React.FC<AlbumTabProps> = ({ onOpenAuthModal, isLoggedIn 
             <span>新規アルバム</span>
           </button>
           <button
-            onClick={() => setIsAddPhotoOpen(true)}
+            onClick={() => setIsAddMediaOpen(true)}
             className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-full text-xs font-bold transition flex items-center gap-1 shadow-xs"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>写真を追加</span>
+            <span>追加</span>
           </button>
         </div>
       </div>
@@ -197,33 +244,55 @@ export const AlbumTab: React.FC<AlbumTabProps> = ({ onOpenAuthModal, isLoggedIn 
                 }`}
               >
                 <span>{album.name}</span>
-                <span className="opacity-75 font-normal text-[10px]">({album.photos.length})</span>
+                <span className="opacity-75 font-normal text-[10px]">({album.items?.length || 0})</span>
               </button>
             ))}
           </div>
         )}
 
-        {/* Photos Grid Section */}
-        {activeAlbum && activeAlbum.photos.length > 0 ? (
+        {/* Media Items Grid Section */}
+        {activeAlbum && activeAlbum.items && activeAlbum.items.length > 0 ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-            {activeAlbum.photos.map((photo) => (
+            {activeAlbum.items.map((item) => (
               <div
-                key={photo.id}
-                onClick={() => setSelectedPhoto(photo)}
-                className="group relative aspect-square bg-slate-200 rounded-2xl overflow-hidden cursor-pointer border border-slate-200/80 shadow-xs hover:shadow-md transition"
+                key={item.id}
+                onClick={() => setSelectedMedia(item)}
+                className="group relative aspect-square bg-slate-900 rounded-2xl overflow-hidden cursor-pointer border border-slate-200/80 shadow-xs hover:shadow-md transition"
               >
-                <img
-                  src={photo.url}
-                  alt={photo.title}
-                  className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition p-2.5 flex flex-col justify-end text-white">
-                  <p className="text-xs font-bold line-clamp-1">{photo.title}</p>
+                {item.type === 'video' ? (
+                  <div className="w-full h-full relative flex items-center justify-center bg-black">
+                    <video
+                      src={item.url}
+                      className="w-full h-full object-cover opacity-80"
+                      muted
+                      preload="metadata"
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="w-10 h-10 rounded-full bg-black/60 backdrop-blur-xs text-white flex items-center justify-center border border-white/30 group-hover:scale-110 transition">
+                        <Play className="w-5 h-5 ml-0.5 fill-current" />
+                      </div>
+                    </div>
+                    <div className="absolute top-2 left-2 px-2 py-0.5 bg-black/60 rounded-md text-[10px] font-bold text-white flex items-center gap-1">
+                      <Film className="w-3 h-3 text-purple-400" />
+                      <span>動画</span>
+                    </div>
+                  </div>
+                ) : (
+                  <img
+                    src={item.url}
+                    alt={item.title}
+                    className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                  />
+                )}
+
+                {/* Title overlay */}
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-2.5 flex flex-col justify-end text-white">
+                  <p className="text-xs font-bold line-clamp-1">{item.title}</p>
                 </div>
 
                 <button
-                  onClick={(e) => handleDeletePhoto(photo.id, e)}
-                  className="absolute top-2 right-2 p-1.5 rounded-full bg-black/50 hover:bg-rose-600 text-white opacity-0 group-hover:opacity-100 transition"
+                  onClick={(e) => handleDeleteMedia(item.id, e)}
+                  className="absolute top-2 right-2 p-1.5 rounded-full bg-black/50 hover:bg-rose-600 text-white opacity-0 group-hover:opacity-100 transition z-10"
                   title="削除"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
@@ -237,118 +306,208 @@ export const AlbumTab: React.FC<AlbumTabProps> = ({ onOpenAuthModal, isLoggedIn 
               <ImageIcon className="w-6 h-6" />
             </div>
             <div>
-              <h3 className="font-bold text-slate-800 text-sm">写真がありません</h3>
+              <h3 className="font-bold text-slate-800 text-sm">写真・動画がありません</h3>
               <p className="text-xs text-slate-500 mt-1">
-                右上の「写真を追加」ボタンからお気に入りの写真をアルバムに保存できます。
+                右上の「追加」ボタンから写真や動画にタイトルを付けて保存できます。
               </p>
             </div>
             <button
-              onClick={() => setIsAddPhotoOpen(true)}
+              onClick={() => setIsAddMediaOpen(true)}
               className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs rounded-xl transition shadow-xs"
             >
-              写真をアップロードする
+              写真・動画を追加する
             </button>
           </div>
         )}
       </div>
 
-      {/* Photo Viewer Modal */}
-      {selectedPhoto && (
+      {/* Media Viewer Modal */}
+      {selectedMedia && (
         <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="relative max-w-2xl w-full max-h-[90vh] flex flex-col items-center">
             <button
-              onClick={() => setSelectedPhoto(null)}
+              onClick={() => setSelectedMedia(null)}
               className="absolute -top-12 right-0 p-2 text-white/80 hover:text-white bg-white/10 hover:bg-white/20 rounded-full transition"
             >
               <X className="w-6 h-6" />
             </button>
 
-            <img
-              src={selectedPhoto.url}
-              alt={selectedPhoto.title}
-              className="max-h-[75vh] w-auto object-contain rounded-2xl shadow-2xl"
-            />
+            {selectedMedia.type === 'video' ? (
+              <video
+                src={selectedMedia.url}
+                controls
+                autoPlay
+                className="max-h-[75vh] w-auto max-w-full rounded-2xl shadow-2xl bg-black"
+              />
+            ) : (
+              <img
+                src={selectedMedia.url}
+                alt={selectedMedia.title}
+                className="max-h-[75vh] w-auto max-w-full object-contain rounded-2xl shadow-2xl"
+              />
+            )}
 
             <div className="mt-4 text-center text-white">
-              <h3 className="font-bold text-lg">{selectedPhoto.title}</h3>
-              <p className="text-xs text-slate-400 mt-0.5">
-                {new Date(selectedPhoto.createdAt).toLocaleDateString('ja-JP')} 追加
+              <div className="flex items-center justify-center gap-1.5">
+                {selectedMedia.type === 'video' ? (
+                  <Film className="w-4 h-4 text-purple-400" />
+                ) : (
+                  <ImageIcon className="w-4 h-4 text-emerald-400" />
+                )}
+                <h3 className="font-bold text-lg">{selectedMedia.title}</h3>
+              </div>
+              <p className="text-xs text-slate-400 mt-1">
+                {new Date(selectedMedia.createdAt).toLocaleDateString('ja-JP')} 追加
               </p>
             </div>
           </div>
         </div>
       )}
 
-      {/* Add Photo Modal */}
-      {isAddPhotoOpen && (
+      {/* Add Media Modal */}
+      {isAddMediaOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-white rounded-2xl p-6 shadow-xl border border-slate-100 space-y-4">
+          <div className="w-full max-w-md bg-white rounded-2xl p-6 shadow-xl border border-slate-100 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center border-b pb-3">
-              <h3 className="font-bold text-base text-slate-900">写真をアルバムに追加</h3>
+              <h3 className="font-bold text-base text-slate-900">写真・動画をアルバムに追加</h3>
               <button
-                onClick={() => setIsAddPhotoOpen(false)}
+                onClick={() => setIsAddMediaOpen(false)}
                 className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleAddPhoto} className="space-y-3.5">
+            <form onSubmit={handleAddMedia} className="space-y-4">
+              {/* Type Switcher */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">種類</label>
+                <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => setMediaType('photo')}
+                    className={`py-2 text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 ${
+                      mediaType === 'photo'
+                        ? 'bg-white text-emerald-700 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <ImageIcon className="w-4 h-4" />
+                    <span>写真 (画像)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setMediaType('video')}
+                    className={`py-2 text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 ${
+                      mediaType === 'video'
+                        ? 'bg-white text-purple-700 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <Film className="w-4 h-4" />
+                    <span>動画</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Title Input */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  画像ファイルのアップロード
+                  タイトル <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={mediaTitle}
+                  onChange={(e) => setMediaTitle(e.target.value)}
+                  placeholder={mediaType === 'video' ? '例: 夏休みのビーチ動画' : '例: 山頂からの絶景'}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white"
+                />
+              </div>
+
+              {/* File Upload */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  ファイルを選択 (端末からアップロード)
                 </label>
                 <input
                   type="file"
-                  accept="image/*"
+                  accept={mediaType === 'video' ? 'video/*' : 'image/*'}
                   onChange={handleFileUpload}
                   className="w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer"
                 />
               </div>
 
-              <div className="text-center text-xs text-slate-400 font-medium my-1">— または —</div>
+              <div className="text-center text-[11px] text-slate-400 font-medium my-1">— または URL / サンプル —</div>
 
+              {/* URL Input */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  画像 URL を直接指定
+                  {mediaType === 'video' ? '動画 URL を直接入力' : '画像 URL を直接入力'}
                 </label>
                 <input
                   type="url"
-                  value={photoUrl}
-                  onChange={(e) => setPhotoUrl(e.target.value)}
-                  placeholder="https://example.com/photo.jpg"
-                  className="w-full px-3 py-2 bg-slate-100 rounded-xl text-xs text-slate-800 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  value={mediaUrl}
+                  onChange={(e) => setMediaUrl(e.target.value)}
+                  placeholder={
+                    mediaType === 'video'
+                      ? 'https://example.com/video.mp4'
+                      : 'https://example.com/photo.jpg'
+                  }
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white"
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">タイトル / キャプション</label>
-                <input
-                  type="text"
-                  value={photoTitle}
-                  onChange={(e) => setPhotoTitle(e.target.value)}
-                  placeholder="例: 夏休みの思い出"
-                  className="w-full px-3 py-2 bg-slate-100 rounded-xl text-xs text-slate-800 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                />
+              {/* Sample Buttons */}
+              <div className="flex gap-2">
+                {mediaType === 'video' ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMediaUrl(
+                        'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4'
+                      );
+                      if (!mediaTitle) setMediaTitle('サンプルドライブ動画');
+                    }}
+                    className="text-[11px] font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 px-2.5 py-1.5 rounded-lg border border-purple-200 transition"
+                  >
+                    + サンプル動画をセット
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMediaUrl(
+                        'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&auto=format&fit=crop&q=80'
+                      );
+                      if (!mediaTitle) setMediaTitle('サンプル沖縄の海');
+                    }}
+                    className="text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1.5 rounded-lg border border-emerald-200 transition"
+                  >
+                    + サンプル画像をセット
+                  </button>
+                )}
               </div>
 
-              {photoUrl && (
-                <div className="p-2 border rounded-xl bg-slate-50 text-center">
-                  <p className="text-[10px] text-slate-500 mb-1">プレビュー</p>
-                  <img
-                    src={photoUrl}
-                    alt="Preview"
-                    className="max-h-32 mx-auto rounded-lg object-cover"
-                  />
+              {/* Preview */}
+              {mediaUrl && (
+                <div className="p-2 border rounded-xl bg-slate-900 text-center">
+                  <p className="text-[10px] text-slate-400 mb-1">プレビュー</p>
+                  {mediaType === 'video' ? (
+                    <video src={mediaUrl} controls className="max-h-36 mx-auto rounded-lg" />
+                  ) : (
+                    <img src={mediaUrl} alt="Preview" className="max-h-36 mx-auto rounded-lg object-cover" />
+                  )}
                 </div>
               )}
 
               <button
                 type="submit"
-                disabled={!photoUrl.trim()}
+                disabled={!mediaUrl.trim()}
                 className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition shadow-xs"
               >
-                アルバムに保存する
+                アルバムに追加保存
               </button>
             </form>
           </div>
@@ -377,8 +536,8 @@ export const AlbumTab: React.FC<AlbumTabProps> = ({ onOpenAuthModal, isLoggedIn 
                   required
                   value={newAlbumName}
                   onChange={(e) => setNewAlbumName(e.target.value)}
-                  placeholder="例: 家族旅行 / 趣味の写真"
-                  className="w-full px-3 py-2 bg-slate-100 rounded-xl text-xs text-slate-800 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  placeholder="例: 家族旅行 / 趣味の動画・写真"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
 

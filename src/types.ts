@@ -8,7 +8,7 @@ export interface User {
   lastSeen?: string;
 }
 
-export type MessageType = 'text' | 'sticker' | 'image' | 'voice' | 'system';
+export type MessageType = 'text' | 'sticker' | 'image' | 'video' | 'voice' | 'system';
 
 export interface Message {
   id: string;

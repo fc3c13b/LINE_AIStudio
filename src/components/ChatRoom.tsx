@@ -4,11 +4,12 @@ import { STICKER_SETS } from '../data/stickers';
 import {
   ChevronLeft,
   Phone,
-  Video,
+  Video as VideoIcon,
   Smile,
   Plus,
   Send,
   Image as ImageIcon,
+  Film,
   Mic,
   Square,
   Play,
@@ -18,6 +19,7 @@ import {
   CheckCheck,
   X,
   Volume2,
+  Upload,
 } from 'lucide-react';
 
 interface ChatRoomProps {
@@ -51,8 +53,26 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isAiRoom = room.id === 'room-ai' || room.members.some((m) => m.id === 'user-ai');
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      if (evt.target?.result) {
+        const resultUrl = evt.target.result as string;
+        const isVideo = file.type.startsWith('video');
+        onSendMessage(isVideo ? 'video' : 'image', resultUrl, { fileName: file.name });
+        setShowPlusMenu(false);
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
 
   // Auto scroll to bottom on new messages
   useEffect(() => {
@@ -159,7 +179,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
             className="p-2 hover:bg-white/10 rounded-full text-white transition"
             title="ビデオ通話"
           >
-            <Video className="w-4 h-4" />
+            <VideoIcon className="w-4 h-4" />
           </button>
         </div>
       </div>
@@ -225,6 +245,16 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
                       </div>
                     )}
 
+                    {msg.type === 'video' && (
+                      <div className="max-w-[240px] overflow-hidden rounded-xl border border-black/10 bg-black">
+                        <video
+                          src={msg.content}
+                          controls
+                          className="w-full h-auto max-h-56 rounded-xl object-cover"
+                        />
+                      </div>
+                    )}
+
                     {msg.type === 'voice' && (
                       <div className="flex items-center gap-2.5 py-1 min-w-[140px]">
                         <button
@@ -274,39 +304,59 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Plus Menu Drawer (Photos/Voice) */}
+      {/* Hidden File Input for Image/Video Upload */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        accept="image/*,video/*"
+        onChange={handleFileUpload}
+        className="hidden"
+      />
+
+      {/* Plus Menu Drawer (Photos/Videos/Voice) */}
       {showPlusMenu && (
-        <div className="bg-white border-t border-slate-200 p-3 grid grid-cols-3 gap-3 animate-in slide-in-from-bottom-2 duration-200 shrink-0 z-20">
+        <div className="bg-white border-t border-slate-200 p-3 grid grid-cols-4 gap-2 animate-in slide-in-from-bottom-2 duration-200 shrink-0 z-20">
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="flex flex-col items-center justify-center gap-1 p-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition text-emerald-800"
+            title="写真や動画を端末から選択"
+          >
+            <Upload className="w-5 h-5 text-emerald-600" />
+            <span className="text-[11px] font-bold">ファイル選択</span>
+          </button>
+
+          <button
+            onClick={() =>
+              onSendMessage(
+                'video',
+                'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4'
+              )
+            }
+            className="flex flex-col items-center justify-center gap-1 p-2.5 rounded-xl bg-purple-50 hover:bg-purple-100 border border-purple-200 transition text-purple-800"
+            title="サンプル動画を送信"
+          >
+            <Film className="w-5 h-5 text-purple-600" />
+            <span className="text-[11px] font-bold">動画送信</span>
+          </button>
+
           <button
             onClick={() =>
               handleSendSampleImage(
                 'https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?w=400&auto=format&fit=crop&q=80'
               )
             }
-            className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 transition text-slate-700"
+            className="flex flex-col items-center justify-center gap-1 p-2.5 rounded-xl bg-blue-50 hover:bg-blue-100 border border-blue-200 transition text-blue-800"
           >
-            <ImageIcon className="w-5 h-5 text-emerald-600" />
-            <span className="text-xs font-bold">写真送信</span>
+            <ImageIcon className="w-5 h-5 text-blue-600" />
+            <span className="text-[11px] font-bold">写真送信</span>
           </button>
 
           <button
             onClick={() => setIsRecordingVoice(!isRecordingVoice)}
-            className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 transition text-slate-700"
+            className="flex flex-col items-center justify-center gap-1 p-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 transition text-rose-800"
           >
-            <Mic className="w-5 h-5 text-red-500" />
-            <span className="text-xs font-bold">ボイス録音</span>
-          </button>
-
-          <button
-            onClick={() =>
-              handleSendSampleImage(
-                'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400&auto=format&fit=crop&q=80'
-              )
-            }
-            className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 transition text-slate-700"
-          >
-            <Sparkles className="w-5 h-5 text-amber-500" />
-            <span className="text-xs font-bold">カフェ画像</span>
+            <Mic className="w-5 h-5 text-rose-600" />
+            <span className="text-[11px] font-bold">ボイス録音</span>
           </button>
         </div>
       )}
