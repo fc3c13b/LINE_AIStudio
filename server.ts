@@ -156,7 +156,15 @@ function getGeminiClient(): GoogleGenAI {
 
 // Server App & HTTP Server
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// Uploads directory static serving
+const UPLOADS_DIR = path.join(process.cwd(), 'uploads');
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
+app.use('/uploads', express.static(UPLOADS_DIR));
 
 const server = http.createServer(app);
 
@@ -322,6 +330,46 @@ LINEらしい自然で明るく親しみやすい口調（適度に絵文字を�
 // REST API Routes
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', onlineClients: clients.size, totalMessages: db.messages.length });
+});
+
+// File Upload Route (Saves photo/video files to server disk)
+app.post('/api/upload', (req, res) => {
+  try {
+    const { fileName, dataUrl } = req.body;
+    if (!dataUrl) {
+      return res.status(400).json({ error: 'dataUrl is required' });
+    }
+
+    const matches = dataUrl.match(/^data:(.+);base64,(.+)$/);
+    if (!matches) {
+      return res.status(400).json({ error: 'Invalid dataUrl format' });
+    }
+
+    const mimeType = matches[1];
+    const base64Data = matches[2];
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    let ext = 'bin';
+    if (mimeType.includes('jpeg') || mimeType.includes('jpg')) ext = 'jpg';
+    else if (mimeType.includes('png')) ext = 'png';
+    else if (mimeType.includes('gif')) ext = 'gif';
+    else if (mimeType.includes('webp')) ext = 'webp';
+    else if (mimeType.includes('mp4')) ext = 'mp4';
+    else if (mimeType.includes('webm')) ext = 'webm';
+    else if (mimeType.includes('quicktime') || mimeType.includes('mov')) ext = 'mov';
+
+    const fileId = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${ext}`;
+    const filePath = path.join(UPLOADS_DIR, fileId);
+    fs.writeFileSync(filePath, buffer);
+
+    const fileUrl = `/uploads/${fileId}`;
+    console.log(`[UPLOAD] File saved to server: ${filePath} -> ${fileUrl}`);
+
+    return res.json({ url: fileUrl, fileName: fileName || fileId, mimeType });
+  } catch (err) {
+    console.error('File upload error:', err);
+    return res.status(500).json({ error: 'Failed to upload file to server' });
+  }
 });
 
 // Authentication Routes

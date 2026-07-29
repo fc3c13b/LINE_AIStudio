@@ -1,0 +1,22 @@
+{
+  "short_name": "LINE風チャット",
+  "name": "LINE風リアルタイムチャット",
+  "icons": [
+    {
+      "src": "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=192&auto=format&fit=crop&q=80",
+      "type": "image/jpeg",
+      "sizes": "192x192"
+    },
+    {
+      "src": "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=512&auto=format&fit=crop&q=80",
+      "type": "image/jpeg",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#7494c0",
+  "theme_color": "#00c300",
+  "display": "standalone",
+  "orientation": "portrait",
+  "scope": "/"
+}

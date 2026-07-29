@@ -20,6 +20,7 @@ import {
   X,
   Volume2,
   Upload,
+  Loader2,
 } from 'lucide-react';
 
 interface ChatRoomProps {
@@ -47,6 +48,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
   const [showStickerPicker, setShowStickerPicker] = useState(false);
   const [activeStickerTab, setActiveStickerTab] = useState(0);
   const [showPlusMenu, setShowPlusMenu] = useState(false);
+  const [isUploadingFile, setIsUploadingFile] = useState(false);
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
@@ -61,13 +63,35 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setIsUploadingFile(true);
     const reader = new FileReader();
-    reader.onload = (evt) => {
+    reader.onload = async (evt) => {
       if (evt.target?.result) {
-        const resultUrl = evt.target.result as string;
+        const dataUrl = evt.target.result as string;
         const isVideo = file.type.startsWith('video');
-        onSendMessage(isVideo ? 'video' : 'image', resultUrl, { fileName: file.name });
-        setShowPlusMenu(false);
+
+        try {
+          const res = await fetch('/api/upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fileName: file.name, dataUrl }),
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            // Send message with server saved URL
+            onSendMessage(isVideo ? 'video' : 'image', data.url, { fileName: file.name });
+          } else {
+            // Fallback
+            onSendMessage(isVideo ? 'video' : 'image', dataUrl, { fileName: file.name });
+          }
+        } catch (uploadErr) {
+          console.error('Failed to upload file to server:', uploadErr);
+          onSendMessage(isVideo ? 'video' : 'image', dataUrl, { fileName: file.name });
+        } finally {
+          setIsUploadingFile(false);
+          setShowPlusMenu(false);
+        }
       }
     };
     reader.readAsDataURL(file);
@@ -421,6 +445,17 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
               </button>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* File Uploading Status Overlay */}
+      {isUploadingFile && (
+        <div className="bg-emerald-50 border-t border-emerald-300 px-4 py-2 flex items-center justify-between text-xs text-emerald-800 font-bold z-30 shrink-0">
+          <div className="flex items-center gap-2">
+            <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+            <span>ファイルをサーバーへ送信中...</span>
+          </div>
+          <span className="text-[10px] text-emerald-600 font-normal">少しお待ちください</span>
         </div>
       )}
 

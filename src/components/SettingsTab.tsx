@@ -1,6 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User } from '../types';
-import { UserCheck, RefreshCw, Zap, ShieldCheck, LogIn, LogOut, KeyRound } from 'lucide-react';
+import {
+  UserCheck,
+  RefreshCw,
+  Zap,
+  ShieldCheck,
+  LogIn,
+  LogOut,
+  KeyRound,
+  Smartphone,
+  Download,
+  Globe,
+  CheckCircle2,
+  ExternalLink,
+} from 'lucide-react';
 
 interface SettingsTabProps {
   currentUser: User;
@@ -25,6 +38,42 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
   const [statusMessage, setStatusMessage] = useState(currentUser.statusMessage || '');
   const [avatar, setAvatar] = useState(currentUser.avatar);
   const [savedSuccess, setSavedSuccess] = useState(false);
+
+  // PWA Deferred Prompt
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isInstalled, setIsInstalled] = useState(false);
+
+  useEffect(() => {
+    const handleBeforeInstall = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+      setIsInstalled(true);
+    }
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) {
+      alert(
+        'AndroidスマホのChromeで右上の「⋮」(メニュー) をタップし、「ホーム画面に追加」または「アプリをインストール」を選択するとAndroidアプリとして起動できます。'
+      );
+      return;
+    }
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setIsInstalled(true);
+    }
+    setDeferredPrompt(null);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -152,6 +201,55 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
               </button>
             </div>
           </form>
+        </div>
+
+        {/* Android App & Web Browser Compatibility Card */}
+        <div className="bg-gradient-to-br from-emerald-900 to-slate-900 text-white p-4.5 rounded-2xl shadow-md space-y-3.5">
+          <div className="flex items-center justify-between">
+            <h2 className="font-bold text-sm flex items-center gap-2">
+              <Smartphone className="w-5 h-5 text-emerald-400" />
+              <span>Android アプリ化・PWA対応</span>
+            </h2>
+            <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold px-2 py-0.5 rounded-full">
+              PWA 100% Ready
+            </span>
+          </div>
+
+          <p className="text-xs text-slate-200 leading-relaxed">
+            PCやスマートフォン全般のブラウザで開けるだけでなく、Android端末にアイコンを追加して「Androidアプリ」として全画面インストール・起動できます！
+          </p>
+
+          <div className="p-3 bg-white/10 rounded-xl border border-white/10 space-y-2 text-xs">
+            <div className="flex items-center gap-2 font-bold text-emerald-300">
+              <Globe className="w-4 h-4" />
+              <span>ブラウザ閲覧とAndroidアプリの両立構造</span>
+            </div>
+            <ul className="list-disc list-inside space-y-1 text-slate-300 text-[11px] leading-relaxed">
+              <li>ブラウザでURLを開けばそのまま動作（アプリのダウンロード不要）</li>
+              <li>Androidの「ホーム画面に追加」を行うと独立した単体アプリとして全画面起動</li>
+            </ul>
+          </div>
+
+          {isInstalled ? (
+            <div className="p-3 bg-emerald-500/20 border border-emerald-400/40 rounded-xl flex items-center gap-2 text-xs font-bold text-emerald-200">
+              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+              <span>アプリモード（ホーム画面インストール済）で起動中</span>
+            </div>
+          ) : (
+            <button
+              onClick={handleInstallClick}
+              className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-bold text-xs rounded-xl transition shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <Download className="w-4 h-4" />
+              <span>Android スマホにアプリとして追加する</span>
+            </button>
+          )}
+
+          <div className="text-[10px] text-slate-400 space-y-1">
+            <p className="font-bold text-slate-300">📱 手動追加の手順 (Android Chrome):</p>
+            <p>1. Chrome右上のメニュー「⋮」をタップ</p>
+            <p>2. 「ホーム画面に追加」または「アプリをインストール」をタップ</p>
+          </div>
         </div>
 
         {/* Real-time Technical Specs */}

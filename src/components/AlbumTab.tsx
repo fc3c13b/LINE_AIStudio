@@ -164,6 +164,8 @@ export const AlbumTab: React.FC<AlbumTabProps> = ({ onOpenAuthModal, isLoggedIn 
     setIsAddMediaOpen(false);
   };
 
+  const [isUploading, setIsUploading] = useState(false);
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -174,10 +176,29 @@ export const AlbumTab: React.FC<AlbumTabProps> = ({ onOpenAuthModal, isLoggedIn 
         setMediaTitle(nameWithoutExt);
       }
 
+      setIsUploading(true);
       const reader = new FileReader();
-      reader.onload = (event) => {
+      reader.onload = async (event) => {
         if (event.target?.result) {
-          setMediaUrl(event.target.result as string);
+          const rawDataUrl = event.target.result as string;
+          try {
+            const res = await fetch('/api/upload', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ fileName: file.name, dataUrl: rawDataUrl }),
+            });
+            if (res.ok) {
+              const data = await res.json();
+              setMediaUrl(data.url);
+            } else {
+              setMediaUrl(rawDataUrl);
+            }
+          } catch (uploadErr) {
+            console.error('Failed to upload album media to server:', uploadErr);
+            setMediaUrl(rawDataUrl);
+          } finally {
+            setIsUploading(false);
+          }
         }
       };
       reader.readAsDataURL(file);
@@ -504,10 +525,17 @@ export const AlbumTab: React.FC<AlbumTabProps> = ({ onOpenAuthModal, isLoggedIn 
 
               <button
                 type="submit"
-                disabled={!mediaUrl.trim()}
-                className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition shadow-xs"
+                disabled={!mediaUrl.trim() || isUploading}
+                className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition shadow-xs flex items-center justify-center gap-2"
               >
-                アルバムに追加保存
+                {isUploading ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>サーバーへアップロード中...</span>
+                  </>
+                ) : (
+                  <span>アルバムに追加保存</span>
+                )}
               </button>
             </form>
           </div>
