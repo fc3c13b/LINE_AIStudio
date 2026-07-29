@@ -60,7 +60,7 @@ export const ChatsTab: React.FC<ChatsTabProps> = ({
         <div className="flex items-baseline gap-2">
           <h1 className="text-xl font-bold text-slate-900 tracking-tight">トーク</h1>
           <span className="text-[10px] font-mono font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-md">
-            v1.1.0 (07/30 02:25)
+            v1.2.0 (07/30 03:15 友達0人)
           </span>
         </div>
         <button

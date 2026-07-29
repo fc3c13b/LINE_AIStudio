@@ -143,18 +143,33 @@ export const HomeTab: React.FC<HomeTabProps> = ({
             </div>
           </button>
 
-          <button
-            onClick={() => onOpenChat('room-ai')}
-            className="p-3 bg-indigo-50 hover:bg-indigo-100/80 border border-indigo-200/70 rounded-xl flex items-center gap-2.5 transition text-left"
-          >
-            <div className="w-9 h-9 rounded-full bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-sm">
-              <Sparkles className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="text-xs font-bold text-indigo-950">LINE AI</div>
-              <div className="text-[10px] text-indigo-700 font-medium">24時間いつでも質問</div>
-            </div>
-          </button>
+          {!isLoggedIn ? (
+            <button
+              onClick={() => onOpenAuthModal && onOpenAuthModal('register')}
+              className="p-3 bg-teal-50 hover:bg-teal-100/80 border border-teal-200/70 rounded-xl flex items-center gap-2.5 transition text-left"
+            >
+              <div className="w-9 h-9 rounded-full bg-teal-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                <Users className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="text-xs font-bold text-teal-950">新規会員登録</div>
+                <div className="text-[10px] text-teal-700 font-medium">アカウントを作成</div>
+              </div>
+            </button>
+          ) : (
+            <button
+              onClick={onOpenProfileSettings}
+              className="p-3 bg-slate-100 hover:bg-slate-200/80 border border-slate-200 rounded-xl flex items-center gap-2.5 transition text-left"
+            >
+              <div className="w-9 h-9 rounded-full bg-slate-700 text-white flex items-center justify-center shrink-0 shadow-sm">
+                <Settings className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="text-xs font-bold text-slate-900">プロフィール編集</div>
+                <div className="text-[10px] text-slate-600 font-medium">登録情報を変更</div>
+              </div>
+            </button>
+          )}
         </div>
 
         {/* Official Accounts */}

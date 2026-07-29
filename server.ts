@@ -60,12 +60,43 @@ interface DBData {
 }
 
 let db: DBData = {
-  users: DEFAULT_USERS,
-  rooms: INITIAL_ROOMS,
-  messages: INITIAL_MESSAGES,
+  users: [],
+  rooms: [],
+  messages: [],
   accounts: [],
   resetTokens: [],
 };
+
+const DUMMY_IDS = ['user-sato', 'user-yui', 'user-takumi', 'user-me', 'user-ai'];
+const DUMMY_ROOM_IDS = ['room-sato', 'room-group-cafe', 'room-ai'];
+
+function sanitizeData(data: DBData): DBData {
+  const users = (data.users || []).filter((u: User) => {
+    if (DUMMY_IDS.includes(u.id)) return false;
+    if (u.name && (u.name.includes('佐藤') || u.name.includes('田中') || u.name.includes('鈴木') || u.name.includes('LINE AI') || u.name === 'あなた')) return false;
+    return true;
+  });
+
+  const rooms = (data.rooms || []).filter((r: ChatRoom) => {
+    if (DUMMY_ROOM_IDS.includes(r.id)) return false;
+    if (r.name && (r.name.includes('カフェ好きサークル') || r.name.includes('佐藤') || r.name.includes('田中') || r.name.includes('鈴木') || r.name.includes('LINE AI'))) return false;
+    return true;
+  });
+
+  const messages = (data.messages || []).filter((m: Message) => {
+    if (DUMMY_IDS.includes(m.senderId)) return false;
+    if (DUMMY_ROOM_IDS.includes(m.roomId)) return false;
+    return true;
+  });
+
+  return {
+    users,
+    rooms,
+    messages,
+    accounts: data.accounts || [],
+    resetTokens: data.resetTokens || [],
+  };
+}
 
 function loadDatabase() {
   try {
@@ -73,20 +104,17 @@ function loadDatabase() {
       const content = fs.readFileSync(DB_FILE, 'utf-8');
       if (content.trim()) {
         const parsed = JSON.parse(content);
-        db = {
-          users: parsed.users || DEFAULT_USERS,
-          rooms: parsed.rooms || INITIAL_ROOMS,
-          messages: parsed.messages || INITIAL_MESSAGES,
-          accounts: parsed.accounts || [],
-          resetTokens: parsed.resetTokens || [],
-        };
-        console.log('Database loaded successfully from disk');
+        db = sanitizeData(parsed);
+        saveDatabase();
+        console.log('Database loaded and sanitized successfully from disk');
       }
     } else {
       saveDatabase();
     }
   } catch (err) {
     console.error('Failed to load DB file, using defaults:', err);
+    db = { users: [], rooms: [], messages: [], accounts: [], resetTokens: [] };
+    saveDatabase();
   }
 }
 
