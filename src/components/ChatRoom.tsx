@@ -201,10 +201,10 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
                 <div className={`flex items-end gap-1.5 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
                   {/* Message Content Bubble */}
                   <div
-                    className={`p-2.5 rounded-2xl text-sm shadow-xs relative break-words leading-relaxed text-gray-800 ${
+                    className={`p-3 rounded-2xl text-sm shadow-sm relative break-words leading-relaxed ${
                       isMe
-                        ? 'bg-[#85e249] rounded-tr-none'
-                        : 'bg-white rounded-tl-none border border-slate-100'
+                        ? 'bg-[#85e249] text-slate-900 rounded-tr-none border border-emerald-400/60'
+                        : 'bg-white text-slate-900 rounded-tl-none border border-slate-200/90'
                     }`}
                   >
                     {msg.type === 'text' && <p className="whitespace-pre-wrap">{msg.content}</p>}
@@ -375,14 +375,14 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
       )}
 
       {/* Bottom Message Input Form */}
-      <form onSubmit={handleSendText} className="bg-white p-2.5 border-t border-slate-200/80 flex items-center gap-2 z-20">
+      <form onSubmit={handleSendText} className="bg-white px-3 py-2.5 border-t border-slate-300/80 flex items-center gap-2 z-20 shadow-md">
         <button
           type="button"
           onClick={() => {
             setShowPlusMenu(!showPlusMenu);
             setShowStickerPicker(false);
           }}
-          className={`p-2 rounded-full transition ${
+          className={`p-2 rounded-xl transition ${
             showPlusMenu ? 'bg-slate-200 text-slate-900' : 'text-slate-500 hover:bg-slate-100'
           }`}
           title="メニュー"
@@ -396,29 +396,31 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
             setShowStickerPicker(!showStickerPicker);
             setShowPlusMenu(false);
           }}
-          className={`p-2 rounded-full transition ${
-            showStickerPicker ? 'bg-emerald-100 text-[#00c300]' : 'text-slate-400 hover:bg-slate-100'
+          className={`p-2 rounded-xl transition ${
+            showStickerPicker ? 'bg-emerald-100 text-[#00c300]' : 'text-slate-500 hover:bg-slate-100'
           }`}
           title="スタンプ"
         >
           <Smile className="w-5 h-5" />
         </button>
 
-        <input
-          type="text"
-          value={inputText}
-          onChange={handleTextChange}
-          placeholder="メッセージを入力"
-          className="flex-1 bg-gray-100 px-4 py-2 rounded-full text-xs sm:text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#00c300]/50 transition"
-        />
+        <div className="flex-1 relative">
+          <input
+            type="text"
+            value={inputText}
+            onChange={handleTextChange}
+            placeholder="コメントを入力..."
+            className="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-2 text-xs sm:text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#00c300] focus:border-[#00c300] focus:bg-white transition shadow-xs"
+          />
+        </div>
 
         <button
           type="submit"
           disabled={!inputText.trim()}
-          className={`p-2 rounded-full transition shadow-xs ${
+          className={`p-2 rounded-xl transition shadow-xs ${
             inputText.trim()
               ? 'bg-[#00c300] text-white hover:bg-[#00b000] cursor-pointer'
-              : 'text-gray-300 cursor-not-allowed'
+              : 'bg-slate-100 text-slate-300 border border-slate-200 cursor-not-allowed'
           }`}
         >
           <Send className="w-5 h-5 fill-current" />
