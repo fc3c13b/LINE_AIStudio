@@ -117,9 +117,9 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
   };
 
   return (
-    <div className="flex-1 flex flex-col bg-[#7494c0] overflow-hidden relative font-sans">
+    <div className="flex-1 flex flex-col bg-[#7494c0] overflow-hidden relative font-sans h-full w-full min-h-0">
       {/* Header */}
-      <div className="bg-[#00c300] text-white px-4 py-3 flex items-center justify-between z-20 shadow-sm">
+      <div className="bg-[#00c300] text-white px-4 py-3 flex items-center justify-between z-20 shadow-sm shrink-0">
         <div className="flex items-center gap-2.5">
           <button
             onClick={onBack}
@@ -165,7 +165,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
       </div>
 
       {/* Messages Feed */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-4">
         <div className="flex justify-center my-1">
           <span className="px-3.5 py-1 bg-black/10 text-white text-[10px] font-medium rounded-full backdrop-blur-xs">
             {new Date().toLocaleDateString('ja-JP', {
@@ -377,7 +377,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
       {/* Bottom Message Input Form */}
       <form
         onSubmit={handleSendText}
-        className="bg-white px-3 py-2.5 border-t border-slate-300 flex items-center gap-2 z-30 shrink-0 shadow-lg"
+        className="bg-white px-3 py-3 border-t-2 border-slate-200 flex items-center gap-2 z-30 shrink-0 shadow-lg"
       >
         <button
           type="button"
@@ -413,7 +413,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
             value={inputText}
             onChange={handleTextChange}
             placeholder="メッセージを入力..."
-            className="w-full bg-slate-100 border border-slate-300 focus:border-[#00c300] rounded-2xl px-4 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#00c300]/30 focus:bg-white transition shadow-inner"
+            className="w-full bg-slate-50 border-2 border-slate-300 focus:border-[#00c300] focus:bg-white rounded-2xl px-4 py-2 text-sm text-slate-900 font-medium placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#00c300]/20 transition shadow-xs"
           />
         </div>
 
