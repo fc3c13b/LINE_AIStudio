@@ -9,6 +9,8 @@ interface HomeTabProps {
   onOpenChat: (roomId: string) => void;
   onOpenNewChatModal: () => void;
   onOpenProfileSettings: () => void;
+  isLoggedIn?: boolean;
+  onOpenAuthModal?: (mode?: 'login' | 'register') => void;
 }
 
 export const HomeTab: React.FC<HomeTabProps> = ({
@@ -18,6 +20,8 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   onOpenChat,
   onOpenNewChatModal,
   onOpenProfileSettings,
+  isLoggedIn = false,
+  onOpenAuthModal,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -57,30 +61,60 @@ export const HomeTab: React.FC<HomeTabProps> = ({
 
       <div className="p-4 space-y-5">
         {/* Profile Card */}
-        <div
-          onClick={onOpenProfileSettings}
-          className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between cursor-pointer hover:border-emerald-300 transition group"
-        >
-          <div className="flex items-center gap-3.5">
-            <div className="relative">
-              <img
-                src={currentUser.avatar}
-                alt={currentUser.name}
-                className="w-14 h-14 rounded-full object-cover border border-slate-200 shadow-inner"
-              />
-              <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-emerald-500 border-2 border-white rounded-full" />
+        {isLoggedIn ? (
+          <div
+            onClick={onOpenProfileSettings}
+            className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between cursor-pointer hover:border-emerald-300 transition group"
+          >
+            <div className="flex items-center gap-3.5">
+              <div className="relative">
+                <img
+                  src={currentUser.avatar}
+                  alt={currentUser.name}
+                  className="w-14 h-14 rounded-full object-cover border border-slate-200 shadow-inner"
+                />
+                <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-emerald-500 border-2 border-white rounded-full" />
+              </div>
+              <div>
+                <h2 className="font-bold text-slate-900 text-base group-hover:text-emerald-600 transition">
+                  {currentUser.name}
+                </h2>
+                <p className="text-xs text-slate-500 line-clamp-1 mt-0.5 font-medium">
+                  {currentUser.statusMessage || 'ステータスメッセージ未設定'}
+                </p>
+              </div>
             </div>
-            <div>
-              <h2 className="font-bold text-slate-900 text-base group-hover:text-emerald-600 transition">
-                {currentUser.name}
-              </h2>
-              <p className="text-xs text-slate-500 line-clamp-1 mt-0.5 font-medium">
-                {currentUser.statusMessage || 'ステータスメッセージ未設定'}
-              </p>
+            <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-emerald-500 transition" />
+          </div>
+        ) : (
+          <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200/80 p-4 rounded-2xl shadow-sm space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-emerald-500/10 border border-emerald-200 flex items-center justify-center text-emerald-600 font-bold text-lg shrink-0">
+                👤
+              </div>
+              <div>
+                <h2 className="font-bold text-slate-900 text-sm">アカウント未登録・未ログイン</h2>
+                <p className="text-xs text-slate-600 mt-0.5">
+                  ユーザー登録するとプロフィールが作成され、LINEトークやアルバムが利用可能になります。
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => onOpenAuthModal && onOpenAuthModal('login')}
+                className="flex-1 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs rounded-xl transition shadow-xs"
+              >
+                ログイン
+              </button>
+              <button
+                onClick={() => onOpenAuthModal && onOpenAuthModal('register')}
+                className="flex-1 py-2 bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 font-bold text-xs rounded-xl transition"
+              >
+                新規アカウント登録
+              </button>
             </div>
           </div>
-          <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-emerald-500 transition" />
-        </div>
+        )}
 
         {/* Search Input */}
         <div className="relative">

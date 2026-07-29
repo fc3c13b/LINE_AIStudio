@@ -47,7 +47,7 @@ export interface Sticker {
   imageUrl: string;
 }
 
-export type TabType = 'home' | 'chats' | 'calls' | 'settings';
+export type TabType = 'home' | 'chats' | 'album' | 'settings';
 
 export interface CallState {
   isActive: boolean;

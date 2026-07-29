@@ -7,9 +7,10 @@ import { ChatsTab } from './components/ChatsTab';
 import { ChatRoom as ChatRoomComponent } from './components/ChatRoom';
 import { CallScreen } from './components/CallScreen';
 import { SettingsTab } from './components/SettingsTab';
+import { AlbumTab } from './components/AlbumTab';
 import { NewChatModal } from './components/NewChatModal';
 import { AuthModal } from './components/AuthModal';
-import { Home, MessageSquare, Phone, Settings as SettingsIcon } from 'lucide-react';
+import { Home, MessageSquare, Images, Settings as SettingsIcon } from 'lucide-react';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>('chats');
@@ -306,6 +307,10 @@ export default function App() {
               onOpenChat={handleOpenChat}
               onOpenNewChatModal={() => setIsNewChatModalOpen(true)}
               onOpenProfileSettings={() => setActiveTab('settings')}
+              isLoggedIn={!!account}
+              onOpenAuthModal={(mode = 'login') =>
+                setAuthModalState({ isOpen: true, mode })
+              }
             />
           )}
 
@@ -318,29 +323,11 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'calls' && (
-            <div className="flex-1 flex flex-col bg-white overflow-hidden">
-              <div className="px-4 py-3 border-b border-slate-200">
-                <h1 className="text-xl font-bold text-slate-900">通話</h1>
-              </div>
-              <div className="flex-1 p-6 flex flex-col items-center justify-center text-center space-y-4">
-                <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shadow-inner">
-                  <Phone className="w-8 h-8" />
-                </div>
-                <div>
-                  <h2 className="font-bold text-slate-900 text-base">LINE 無料通話・ビデオ通話</h2>
-                  <p className="text-xs text-slate-500 mt-1 max-w-xs">
-                    トーク画面から相手を選んで高音質な無料音声通話・ビデオ通話を開始できます。
-                  </p>
-                </div>
-                <button
-                  onClick={() => setActiveTab('chats')}
-                  className="px-5 py-2.5 bg-emerald-500 text-white font-bold text-xs rounded-full shadow-sm"
-                >
-                  トーク一覧を見る
-                </button>
-              </div>
-            </div>
+          {activeTab === 'album' && (
+            <AlbumTab
+              isLoggedIn={!!account}
+              onOpenAuthModal={() => setAuthModalState({ isOpen: true, mode: 'login' })}
+            />
           )}
 
           {activeTab === 'settings' && (
@@ -387,13 +374,13 @@ export default function App() {
             </button>
 
             <button
-              onClick={() => setActiveTab('calls')}
+              onClick={() => setActiveTab('album')}
               className={`flex flex-col items-center gap-1 flex-1 py-1 transition ${
-                activeTab === 'calls' ? 'text-[#00c300] font-bold' : 'text-slate-400 hover:text-slate-600'
+                activeTab === 'album' ? 'text-[#00c300] font-bold' : 'text-slate-400 hover:text-slate-600'
               }`}
             >
-              <Phone className="w-5 h-5" />
-              <span className="text-[10px]">通話</span>
+              <Images className="w-5 h-5" />
+              <span className="text-[10px]">アルバム</span>
             </button>
 
             <button
