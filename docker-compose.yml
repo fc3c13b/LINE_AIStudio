@@ -1,11 +1,6 @@
-version: '3.8'
-
 services:
   app:
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-your-username}/my-app:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/fc3c13b/line_aistudio:latest
     container_name: my-app
     restart: always
     ports:
@@ -19,7 +14,7 @@ services:
       - ./data:/app/data
 
   # コンテナの自動更新ツール（Watchtower）
-  # GitHub Packages に新しいイメージが推しされたら自動でNAS上のコンテナをリロードします
+  # GitHub Packages に新しいイメージがプッシュされたら自動でNAS上のコンテナをリロードします
   watchtower:
     image: containrrr/watchtower
     container_name: watchtower

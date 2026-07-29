@@ -8,6 +8,7 @@ import { ChatRoom as ChatRoomComponent } from './components/ChatRoom';
 import { CallScreen } from './components/CallScreen';
 import { SettingsTab } from './components/SettingsTab';
 import { NewChatModal } from './components/NewChatModal';
+import { AuthModal } from './components/AuthModal';
 import { Home, MessageSquare, Phone, Settings as SettingsIcon } from 'lucide-react';
 
 export default function App() {
@@ -23,12 +24,44 @@ export default function App() {
   const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
   const [callState, setCallState] = useState<CallState | null>(null);
 
-  const me: User = users.find((u) => u.id === 'user-me') || {
-    id: 'user-me',
-    name: 'あなた',
+  // Account & Auth state
+  const [authModalState, setAuthModalState] = useState<{
+    isOpen: boolean;
+    mode: 'login' | 'register' | 'forgot';
+  }>({ isOpen: false, mode: 'login' });
+
+  const [account, setAccount] = useState<{ id: string; name: string; email: string } | null>(() => {
+    try {
+      const saved = localStorage.getItem('line_app_account');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const [activeUserId, setActiveUserId] = useState<string>(() => account?.id || 'user-me');
+
+  const me: User = users.find((u) => u.id === activeUserId) || {
+    id: activeUserId,
+    name: account?.name || 'あなた',
     avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
     statusMessage: 'プログラミング勉強中 💻',
     isOnline: true,
+  };
+
+  const handleAuthSuccess = (user: User, accountInfo?: { id: string; name: string; email: string }) => {
+    if (accountInfo) {
+      setAccount(accountInfo);
+      localStorage.setItem('line_app_account', JSON.stringify(accountInfo));
+    }
+    setActiveUserId(user.id);
+    fetchData();
+  };
+
+  const handleLogout = () => {
+    setAccount(null);
+    localStorage.removeItem('line_app_account');
+    setActiveUserId('user-me');
   };
 
   // 1. Initial REST fetch
@@ -313,8 +346,13 @@ export default function App() {
           {activeTab === 'settings' && (
             <SettingsTab
               currentUser={me}
+              accountEmail={account?.email}
               onUpdateProfile={handleUpdateProfile}
               onResetDatabase={handleResetDatabase}
+              onOpenAuthModal={(mode = 'login') =>
+                setAuthModalState({ isOpen: true, mode })
+              }
+              onLogout={handleLogout}
               isConnected={isConnected}
             />
           )}
@@ -385,6 +423,14 @@ export default function App() {
       {callState && callState.isActive && (
         <CallScreen callState={callState} onEndCall={() => setCallState(null)} />
       )}
+
+      {/* Auth Modal (Login / Register / Forgot Password) */}
+      <AuthModal
+        isOpen={authModalState.isOpen}
+        initialMode={authModalState.mode}
+        onClose={() => setAuthModalState((prev) => ({ ...prev, isOpen: false }))}
+        onSuccess={handleAuthSuccess}
+      />
     </SmartphoneFrame>
   );
 }

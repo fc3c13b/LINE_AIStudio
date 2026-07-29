@@ -2,6 +2,7 @@ import express from 'express';
 import http from 'http';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 import { WebSocketServer, WebSocket } from 'ws';
 import { GoogleGenAI } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
@@ -9,6 +10,18 @@ import { User, ChatRoom, Message, WSMessagePayload } from './src/types';
 
 const PORT = 3000;
 const DB_FILE = path.join(process.cwd(), 'data', 'db.json');
+
+// Password hashing helper
+function hashPassword(password: string, salt?: string): { hash: string; salt: string } {
+  const s = salt || crypto.randomBytes(16).toString('hex');
+  const hash = crypto.pbkdf2Sync(password, s, 1000, 64, 'sha512').toString('hex');
+  return { hash, salt: s };
+}
+
+function verifyPassword(password: string, hash: string, salt: string): boolean {
+  const newHash = crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
+  return newHash === hash;
+}
 
 // Ensure data directory exists
 if (!fs.existsSync(path.dirname(DB_FILE))) {
@@ -135,17 +148,36 @@ const INITIAL_MESSAGES: Message[] = [
   },
 ];
 
+export interface Account {
+  id: string;
+  name: string;
+  email: string;
+  passwordHash: string;
+  salt: string;
+  createdAt: string;
+}
+
+export interface ResetToken {
+  email: string;
+  code: string;
+  expiresAt: number;
+}
+
 // In-Memory Database + File Persist
 interface DBData {
   users: User[];
   rooms: ChatRoom[];
   messages: Message[];
+  accounts: Account[];
+  resetTokens: ResetToken[];
 }
 
 let db: DBData = {
   users: DEFAULT_USERS,
   rooms: INITIAL_ROOMS,
   messages: INITIAL_MESSAGES,
+  accounts: [],
+  resetTokens: [],
 };
 
 function loadDatabase() {
@@ -153,7 +185,14 @@ function loadDatabase() {
     if (fs.existsSync(DB_FILE)) {
       const content = fs.readFileSync(DB_FILE, 'utf-8');
       if (content.trim()) {
-        db = JSON.parse(content);
+        const parsed = JSON.parse(content);
+        db = {
+          users: parsed.users || DEFAULT_USERS,
+          rooms: parsed.rooms || INITIAL_ROOMS,
+          messages: parsed.messages || INITIAL_MESSAGES,
+          accounts: parsed.accounts || [],
+          resetTokens: parsed.resetTokens || [],
+        };
         console.log('Database loaded successfully from disk');
       }
     } else {
@@ -370,6 +409,169 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', onlineClients: clients.size, totalMessages: db.messages.length });
 });
 
+// Authentication Routes
+app.post('/api/auth/register', (req, res) => {
+  const { name, email, password } = req.body;
+
+  if (!name || !email || !password) {
+    return res.status(400).json({ error: 'ユーザー名、メールアドレス、パスワードをすべて入力してください。' });
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+  if (db.accounts.some((a) => a.email.toLowerCase() === normalizedEmail)) {
+    return res.status(400).json({ error: 'このメールアドレスは既に登録されています。' });
+  }
+
+  if (password.length < 6) {
+    return res.status(400).json({ error: 'パスワードは6文字以上で指定してください。' });
+  }
+
+  const userId = `user-${Date.now()}`;
+  const { hash, salt } = hashPassword(password);
+
+  const newAccount: Account = {
+    id: userId,
+    name: name.trim(),
+    email: normalizedEmail,
+    passwordHash: hash,
+    salt,
+    createdAt: new Date().toISOString(),
+  };
+
+  const newUser: User = {
+    id: userId,
+    name: name.trim(),
+    avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(name.trim())}`,
+    statusMessage: '新規登録ユーザーです！よろしくお願いします✨',
+    isOnline: true,
+  };
+
+  db.accounts.push(newAccount);
+  db.users.push(newUser);
+  saveDatabase();
+
+  console.log(`[AUTH] Registered new user: ${name} (${normalizedEmail})`);
+
+  res.json({
+    user: newUser,
+    account: { id: newAccount.id, name: newAccount.name, email: newAccount.email },
+  });
+});
+
+app.post('/api/auth/login', (req, res) => {
+  const { email, password } = req.body;
+
+  if (!email || !password) {
+    return res.status(400).json({ error: 'メールアドレスとパスワードを入力してください。' });
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+  const account = db.accounts.find((a) => a.email.toLowerCase() === normalizedEmail);
+
+  if (!account || !verifyPassword(password, account.passwordHash, account.salt)) {
+    return res.status(401).json({ error: 'メールアドレスまたはパスワードが正しくありません。' });
+  }
+
+  let user = db.users.find((u) => u.id === account.id);
+  if (!user) {
+    user = {
+      id: account.id,
+      name: account.name,
+      avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(account.name)}`,
+      statusMessage: 'オンライン',
+      isOnline: true,
+    };
+    db.users.push(user);
+    saveDatabase();
+  } else {
+    user.isOnline = true;
+    saveDatabase();
+  }
+
+  console.log(`[AUTH] User logged in: ${account.name} (${normalizedEmail})`);
+
+  res.json({
+    user,
+    account: { id: account.id, name: account.name, email: account.email },
+  });
+});
+
+app.post('/api/auth/forgot-password', (req, res) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ error: 'メールアドレスを入力してください。' });
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+  const account = db.accounts.find((a) => a.email.toLowerCase() === normalizedEmail);
+
+  if (!account) {
+    // セキュリティ上の理由でアカウントが存在しなくてもメッセージは同じにする（ただしデモ用にもわかりやすく返す）
+    return res.json({
+      success: true,
+      message: '入力されたメールアドレスにパスワード再設定コードを発行しました（登録がない場合もメッセージは共通です）。',
+    });
+  }
+
+  // 6桁コード生成
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  const expiresAt = Date.now() + 15 * 60 * 1000; // 15分有効
+
+  db.resetTokens = db.resetTokens.filter((t) => t.email.toLowerCase() !== normalizedEmail);
+  db.resetTokens.push({ email: normalizedEmail, code, expiresAt });
+  saveDatabase();
+
+  console.log(`[AUTH] Password reset requested for ${normalizedEmail}. Reset Code: [ ${code} ]`);
+
+  res.json({
+    success: true,
+    message: 'パスワード再設定コードを発行しました。下の「再設定コード」に入力してください。',
+    devCode: code, // デモ・ローカル実行時にその場ですぐテストできるようコードを返却
+  });
+});
+
+app.post('/api/auth/reset-password', (req, res) => {
+  const { email, code, newPassword } = req.body;
+
+  if (!email || !code || !newPassword) {
+    return res.status(400).json({ error: 'すべての項目を入力してください。' });
+  }
+
+  if (newPassword.length < 6) {
+    return res.status(400).json({ error: '新しいパスワードは6文字以上で指定してください。' });
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+  const tokenIndex = db.resetTokens.findIndex(
+    (t) => t.email.toLowerCase() === normalizedEmail && t.code === code.trim() && t.expiresAt > Date.now()
+  );
+
+  if (tokenIndex === -1) {
+    return res.status(400).json({ error: '再設定コードが無効か、有効期限（15分）が切れています。' });
+  }
+
+  const account = db.accounts.find((a) => a.email.toLowerCase() === normalizedEmail);
+  if (!account) {
+    return res.status(400).json({ error: 'アカウントが見つかりません。' });
+  }
+
+  const { hash, salt } = hashPassword(newPassword);
+  account.passwordHash = hash;
+  account.salt = salt;
+
+  // 使用済みトークン削除
+  db.resetTokens.splice(tokenIndex, 1);
+  saveDatabase();
+
+  console.log(`[AUTH] Password reset completed for ${normalizedEmail}`);
+
+  res.json({
+    success: true,
+    message: 'パスワードが正常に再設定されました。新しいパスワードでログインしてください。',
+  });
+});
+
 app.get('/api/users', (req, res) => {
   res.json(db.users);
 });
@@ -427,6 +629,8 @@ app.post('/api/seed/reset', (req, res) => {
     users: DEFAULT_USERS,
     rooms: INITIAL_ROOMS,
     messages: INITIAL_MESSAGES,
+    accounts: db.accounts || [],
+    resetTokens: [],
   };
   saveDatabase();
   res.json({ message: 'Database reset to default seed' });
