@@ -295,6 +295,10 @@ export default function App() {
           onStartCall={handleStartCall}
           isPartnerTyping={partnerTyping[activeRoomId] || false}
           onSendTypingStatus={handleSendTypingStatus}
+          onOpenAlbums={() => {
+            setActiveRoomId(null);
+            setActiveTab('album');
+          }}
         />
       ) : (
         /* Tab Views */
