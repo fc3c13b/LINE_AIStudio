@@ -158,56 +158,61 @@ export const HomeTab: React.FC<HomeTabProps> = ({
         </div>
 
         {/* Official Accounts */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-xs font-bold text-slate-500 px-1">
-            <span>公式アカウント</span>
-            <span className="text-slate-400 font-normal">{officialAccounts.length}</span>
-          </div>
+        {officialAccounts.length > 0 && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs font-bold text-slate-500 px-1">
+              <span>公式アカウント</span>
+              <span className="text-slate-400 font-normal">{officialAccounts.length}</span>
+            </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200/80 divide-y divide-slate-100 overflow-hidden shadow-sm">
-            {officialAccounts.map((acc) => (
-              <div
-                key={acc.id}
-                onClick={() => onOpenChat('room-ai')}
-                className="p-3 flex items-center justify-between hover:bg-slate-50 cursor-pointer transition"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="relative">
-                    <img
-                      src={acc.avatar}
-                      alt={acc.name}
-                      className="w-11 h-11 rounded-full object-cover border border-slate-200"
-                    />
-                    <ShieldCheck className="w-4 h-4 text-emerald-500 fill-emerald-100 absolute -bottom-1 -right-1" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-bold text-slate-900 text-sm">{acc.name}</span>
-                      <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded">
-                        公式
-                      </span>
+            <div className="bg-white rounded-2xl border border-slate-200/80 divide-y divide-slate-100 overflow-hidden shadow-sm">
+              {officialAccounts.map((acc) => (
+                <div
+                  key={acc.id}
+                  onClick={() => onOpenChat('room-ai')}
+                  className="p-3 flex items-center justify-between hover:bg-slate-50 cursor-pointer transition"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="relative">
+                      <img
+                        src={acc.avatar}
+                        alt={acc.name}
+                        className="w-11 h-11 rounded-full object-cover border border-slate-200"
+                      />
+                      <ShieldCheck className="w-4 h-4 text-emerald-500 fill-emerald-100 absolute -bottom-1 -right-1" />
                     </div>
-                    <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">{acc.statusMessage}</p>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-slate-900 text-sm">{acc.name}</span>
+                        <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded">
+                          公式
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">{acc.statusMessage}</p>
+                    </div>
                   </div>
+                  <button className="px-3 py-1 bg-emerald-500 text-white text-xs font-bold rounded-full hover:bg-emerald-600 transition shadow-sm">
+                    トーク
+                  </button>
                 </div>
-                <button className="px-3 py-1 bg-emerald-500 text-white text-xs font-bold rounded-full hover:bg-emerald-600 transition shadow-sm">
-                  トーク
-                </button>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Friends List */}
         <div className="space-y-2">
           <div className="flex items-center justify-between text-xs font-bold text-slate-500 px-1">
             <span>友達</span>
-            <span className="text-slate-400 font-normal">{filteredFriends.length}</span>
+            <span className="text-slate-400 font-normal">{filteredFriends.length} 人</span>
           </div>
 
           <div className="bg-white rounded-2xl border border-slate-200/80 divide-y divide-slate-100 overflow-hidden shadow-sm">
             {filteredFriends.length === 0 ? (
-              <div className="p-6 text-center text-xs text-slate-400">該当する友達が見つかりませんでした</div>
+              <div className="p-6 text-center text-xs text-slate-500 space-y-1">
+                <p className="font-bold text-slate-700">登録されている友達はいません (0人)</p>
+                <p className="text-[11px] text-slate-400">「友達追加・グループ」から友達を追加してください。</p>
+              </div>
             ) : (
               filteredFriends.map((friend) => {
                 const room = rooms.find(

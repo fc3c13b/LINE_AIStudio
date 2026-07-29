@@ -109,7 +109,13 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
             </label>
 
             <div className="space-y-2 max-h-60 overflow-y-auto">
-              {availableFriends.map((friend) => {
+              {availableFriends.length === 0 ? (
+                <div className="p-4 text-center text-xs text-slate-500 bg-slate-50 rounded-xl border border-slate-200/80">
+                  <p className="font-bold text-slate-700">選択可能な友達がいません (0人)</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">他のユーザーがアカウント新規登録・ログインすると友達として表示されます。</p>
+                </div>
+              ) : (
+                availableFriends.map((friend) => {
                 const isSelected = selectedUserIds.includes(friend.id);
                 return (
                   <div
@@ -157,7 +163,8 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
                     </div>
                   </div>
                 );
-              })}
+              })
+              )}
             </div>
           </div>
 
