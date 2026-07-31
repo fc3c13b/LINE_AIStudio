@@ -445,14 +445,14 @@ export const AlbumTab: React.FC<AlbumTabProps> = () => {
           </div>
 
           {/* Albums Cards Grid */}
-          <div className="p-4 flex-1">
+          <div className="p-2 sm:p-3 flex-1 w-full">
             {albums.length > 0 ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5">
+              <div className="grid grid-cols-2 gap-2 w-full">
                 {albums.map((album) => (
                   <div
                     key={album.id}
                     onClick={() => setActiveAlbumId(album.id)}
-                    className="group bg-white rounded-2xl border border-slate-200/90 overflow-hidden shadow-xs hover:shadow-md transition cursor-pointer flex flex-col relative"
+                    className="group bg-white rounded-xl border border-slate-200/90 overflow-hidden shadow-xs hover:shadow-md transition cursor-pointer flex flex-col relative w-full"
                   >
                     {/* Cover Collage Thumbnail */}
                     <div className="aspect-square bg-slate-100 overflow-hidden relative border-b border-slate-100">
@@ -574,14 +574,14 @@ export const AlbumTab: React.FC<AlbumTabProps> = () => {
             </div>
 
             {/* 3-Column Photo Grid */}
-            <div className="p-1 sm:p-2 flex-1">
+            <div className="p-0 flex-1 w-full">
               {activeAlbum.items && activeAlbum.items.length > 0 ? (
-                <div className="grid grid-cols-3 gap-1 sm:gap-1.5">
+                <div className="grid grid-cols-3 gap-0.5 w-full">
                   {activeAlbum.items.map((item, idx) => (
                     <div
                       key={item.id}
                       onClick={() => setSelectedMediaIndex(idx)}
-                      className="group relative aspect-square bg-slate-900 overflow-hidden cursor-pointer rounded-lg border border-slate-200/60 transition hover:opacity-95"
+                      className="group relative aspect-square bg-slate-900 overflow-hidden cursor-pointer rounded-none transition hover:opacity-95 w-full"
                     >
                       {item.type === 'video' ? (
                         <div className="w-full h-full relative bg-black flex items-center justify-center">
@@ -883,11 +883,11 @@ export const AlbumTab: React.FC<AlbumTabProps> = () => {
           </div>
 
           {/* Center Stage */}
-          <div className="flex-1 relative flex items-center justify-center p-4">
+          <div className="flex-1 relative flex items-center justify-center p-0 w-full">
             {selectedMediaIndex > 0 && (
               <button
                 onClick={() => setSelectedMediaIndex(selectedMediaIndex - 1)}
-                className="absolute left-3 p-3 rounded-full bg-black/50 hover:bg-black/80 text-white z-30 transition cursor-pointer"
+                className="absolute left-2 p-2.5 rounded-full bg-black/60 hover:bg-black/80 text-white z-30 transition cursor-pointer"
               >
                 <ChevronLeft className="w-6 h-6" />
               </button>
@@ -896,13 +896,13 @@ export const AlbumTab: React.FC<AlbumTabProps> = () => {
             <img
               src={activeAlbum.items[selectedMediaIndex].url}
               alt=""
-              className="max-h-[78vh] w-auto max-w-full rounded-2xl shadow-2xl object-contain"
+              className="max-h-[85vh] w-full object-contain shadow-2xl"
             />
 
             {selectedMediaIndex < activeAlbum.items.length - 1 && (
               <button
                 onClick={() => setSelectedMediaIndex(selectedMediaIndex + 1)}
-                className="absolute right-3 p-3 rounded-full bg-black/50 hover:bg-black/80 text-white z-30 transition cursor-pointer"
+                className="absolute right-2 p-2.5 rounded-full bg-black/60 hover:bg-black/80 text-white z-30 transition cursor-pointer"
               >
                 <ChevronRight className="w-6 h-6" />
               </button>

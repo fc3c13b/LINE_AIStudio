@@ -5,14 +5,12 @@ import { SmartphoneFrame } from './components/SmartphoneFrame';
 import { HomeTab } from './components/HomeTab';
 import { ChatsTab } from './components/ChatsTab';
 import { ChatRoom as ChatRoomComponent } from './components/ChatRoom';
-import { CallScreen } from './components/CallScreen';
 import { SettingsTab } from './components/SettingsTab';
 import { AlbumTab } from './components/AlbumTab';
 import { MusicTab } from './components/MusicTab';
-import { NewChatModal } from './components/NewChatModal';
-import { AuthModal } from './components/AuthModal';
 import { LockScreen } from './components/LockScreen';
 import { UnauthenticatedGuard } from './components/UnauthenticatedGuard';
+import { ModalsContainer } from './components/ModalsContainer';
 import { Home, MessageSquare, Images, Music, Settings as SettingsIcon } from 'lucide-react';
 
 export default function App() {
@@ -243,9 +241,48 @@ export default function App() {
     });
   };
 
+  // Add Friend
+  const handleAddFriend = async (friendId: string) => {
+    try {
+      const res = await fetch('/api/users/add-friend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: me.id, friendId }),
+      });
+      if (res.ok) {
+        fetchData();
+      }
+    } catch (err) {
+      console.error('Error adding friend:', err);
+    }
+  };
+
+  // Remove Friend
+  const handleRemoveFriend = async (friendId: string) => {
+    try {
+      const res = await fetch('/api/users/remove-friend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: me.id, friendId }),
+      });
+      if (res.ok) {
+        fetchData();
+      }
+    } catch (err) {
+      console.error('Error removing friend:', err);
+    }
+  };
+
   // Create Room
   const handleCreateRoom = async (name: string, memberIds: string[], isGroup: boolean) => {
     try {
+      // Auto add members as friends if not already
+      for (const mId of memberIds) {
+        if (!me.friendIds?.includes(mId)) {
+          await handleAddFriend(mId);
+        }
+      }
+
       const res = await fetch('/api/rooms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -350,6 +387,8 @@ export default function App() {
               onOpenAuthModal={(mode = 'login') =>
                 setAuthModalState({ isOpen: true, mode })
               }
+              onAddFriend={handleAddFriend}
+              onRemoveFriend={handleRemoveFriend}
             />
           )}
 
@@ -452,27 +491,18 @@ export default function App() {
         </div>
       )}
 
-      {/* New Chat Modal */}
-      {isNewChatModalOpen && (
-        <NewChatModal
-          users={users}
-          currentUser={me}
-          onClose={() => setIsNewChatModalOpen(false)}
-          onCreateRoom={handleCreateRoom}
-        />
-      )}
-
-      {/* Call Screen Overlay */}
-      {callState && callState.isActive && (
-        <CallScreen callState={callState} onEndCall={() => setCallState(null)} />
-      )}
-
-      {/* Auth Modal (Login / Register / Forgot Password) */}
-      <AuthModal
-        isOpen={authModalState.isOpen}
-        initialMode={authModalState.mode}
-        onClose={() => setAuthModalState((prev) => ({ ...prev, isOpen: false }))}
-        onSuccess={handleAuthSuccess}
+      {/* Modals & Overlays Container */}
+      <ModalsContainer
+        isNewChatModalOpen={isNewChatModalOpen}
+        users={users}
+        currentUser={me}
+        onCloseNewChatModal={() => setIsNewChatModalOpen(false)}
+        onCreateRoom={handleCreateRoom}
+        callState={callState}
+        onEndCall={() => setCallState(null)}
+        authModalState={authModalState}
+        onCloseAuthModal={() => setAuthModalState((prev) => ({ ...prev, isOpen: false }))}
+        onAuthSuccess={handleAuthSuccess}
       />
     </SmartphoneFrame>
   );

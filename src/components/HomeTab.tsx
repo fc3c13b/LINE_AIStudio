@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { User, ChatRoom } from '../types';
-import { Search, UserPlus, Users, Sparkles, ChevronRight, MessageSquare, ShieldCheck, Settings } from 'lucide-react';
+import { Search, UserPlus, Users, Sparkles, ChevronRight, MessageSquare, ShieldCheck, Settings, UserX } from 'lucide-react';
 
 interface HomeTabProps {
   currentUser: User;
@@ -11,6 +11,8 @@ interface HomeTabProps {
   onOpenProfileSettings: () => void;
   isLoggedIn?: boolean;
   onOpenAuthModal?: (mode?: 'login' | 'register') => void;
+  onAddFriend?: (friendId: string) => void;
+  onRemoveFriend?: (friendId: string) => void;
 }
 
 export const HomeTab: React.FC<HomeTabProps> = ({
@@ -22,11 +24,17 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   onOpenProfileSettings,
   isLoggedIn = false,
   onOpenAuthModal,
+  onAddFriend,
+  onRemoveFriend,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [isAddFriendModalOpen, setIsAddFriendModalOpen] = useState(false);
+  const [friendSearchQuery, setFriendSearchQuery] = useState('');
+  const [friendToRemove, setFriendToRemove] = useState<User | null>(null);
 
-  // Filter friends (excluding current user)
-  const friends = users.filter((u) => u.id !== currentUser.id && !u.isOfficial);
+  // Filter friends (must be in currentUser.friendIds)
+  const userFriendIds = currentUser.friendIds || [];
+  const friends = users.filter((u) => u.id !== currentUser.id && !u.isOfficial && userFriendIds.includes(u.id));
   const officialAccounts = users.filter((u) => u.isOfficial);
   const groupRooms = rooms.filter((r) => r.isGroup);
 
@@ -34,6 +42,17 @@ export const HomeTab: React.FC<HomeTabProps> = ({
     (u) =>
       u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (u.statusMessage && u.statusMessage.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
+
+  // Non-friends available to add
+  const nonFriends = users.filter(
+    (u) => u.id !== currentUser.id && !u.isOfficial && !userFriendIds.includes(u.id)
+  );
+
+  const searchedNonFriends = nonFriends.filter(
+    (u) =>
+      u.name.toLowerCase().includes(friendSearchQuery.toLowerCase()) ||
+      u.id.toLowerCase().includes(friendSearchQuery.toLowerCase())
   );
 
   return (
@@ -224,9 +243,16 @@ export const HomeTab: React.FC<HomeTabProps> = ({
 
           <div className="bg-white rounded-2xl border border-slate-200/80 divide-y divide-slate-100 overflow-hidden shadow-sm">
             {filteredFriends.length === 0 ? (
-              <div className="p-6 text-center text-xs text-slate-500 space-y-1">
+              <div className="p-6 text-center text-xs text-slate-500 space-y-3">
                 <p className="font-bold text-slate-700">登録されている友達はいません (0人)</p>
-                <p className="text-[11px] text-slate-400">「友達追加・グループ」から友達を追加してください。</p>
+                <p className="text-[11px] text-slate-400">「友達追加」から他のユーザーを検索して友達に追加できます。</p>
+                <button
+                  onClick={() => setIsAddFriendModalOpen(true)}
+                  className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs rounded-xl transition shadow-xs inline-flex items-center gap-1.5"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  <span>友達を追加・検索する</span>
+                </button>
               </div>
             ) : (
               filteredFriends.map((friend) => {
@@ -263,13 +289,142 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                         </p>
                       </div>
                     </div>
-                    <MessageSquare className="w-4 h-4 text-slate-400 hover:text-emerald-500 transition" />
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (room) {
+                            onOpenChat(room.id);
+                          } else {
+                            onOpenNewChatModal();
+                          }
+                        }}
+                        title="トークを開く"
+                        className="p-2 hover:bg-slate-100 rounded-full text-slate-400 hover:text-emerald-600 transition"
+                      >
+                        <MessageSquare className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setFriendToRemove(friend);
+                        }}
+                        title="友達解除"
+                        className="p-2 hover:bg-rose-50 rounded-full text-slate-400 hover:text-rose-500 transition"
+                      >
+                        <UserX className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 );
               })
             )}
           </div>
         </div>
+
+        {/* Remove Friend Confirm Modal */}
+        {friendToRemove && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+            <div className="bg-white w-full max-w-xs rounded-3xl p-5 shadow-2xl border border-slate-200 space-y-4 text-center">
+              <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-500 flex items-center justify-center mx-auto">
+                <UserX className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900 text-sm">友達登録を解除しますか？</h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  「<span className="font-bold text-slate-700">{friendToRemove.name}</span>」さんを友達リストから削除します。
+                </p>
+              </div>
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  onClick={() => setFriendToRemove(null)}
+                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition"
+                >
+                  キャンセル
+                </button>
+                <button
+                  onClick={() => {
+                    if (onRemoveFriend) {
+                      onRemoveFriend(friendToRemove.id);
+                    }
+                    setFriendToRemove(null);
+                  }}
+                  className="flex-1 py-2.5 bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs rounded-xl transition shadow-xs"
+                >
+                  解除する
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Add Friend Modal */}
+        {isAddFriendModalOpen && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+            <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden border border-slate-200 flex flex-col max-h-[85vh]">
+              <div className="p-4 border-b border-slate-200 flex items-center justify-between">
+                <h2 className="font-bold text-base text-slate-900">友達追加 (ユーザー検索)</h2>
+                <button
+                  onClick={() => setIsAddFriendModalOpen(false)}
+                  className="p-1.5 hover:bg-slate-100 rounded-full text-slate-500 transition"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="p-3 bg-slate-50 border-b border-slate-200/80">
+                <div className="relative">
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={friendSearchQuery}
+                    onChange={(e) => setFriendSearchQuery(e.target.value)}
+                    placeholder="名前またはIDで検索"
+                    className="w-full bg-white border border-slate-200 pl-9 pr-3 py-2 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                  />
+                </div>
+              </div>
+
+              <div className="p-4 flex-1 overflow-y-auto space-y-3">
+                {searchedNonFriends.length === 0 ? (
+                  <div className="text-center py-8 text-xs text-slate-400">
+                    追加可能なユーザーが見つかりません
+                  </div>
+                ) : (
+                  searchedNonFriends.map((user) => (
+                    <div
+                      key={user.id}
+                      className="p-3 bg-slate-50 rounded-2xl border border-slate-200/70 flex items-center justify-between"
+                    >
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={user.avatar}
+                          alt={user.name}
+                          className="w-10 h-10 rounded-full object-cover border border-slate-200"
+                        />
+                        <div>
+                          <div className="font-bold text-slate-900 text-xs">{user.name}</div>
+                          <div className="text-[10px] text-slate-400 mt-0.5 line-clamp-1">
+                            {user.statusMessage || `ID: ${user.id}`}
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          if (onAddFriend) onAddFriend(user.id);
+                        }}
+                        className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs rounded-xl transition shadow-xs flex items-center gap-1"
+                      >
+                        <UserPlus className="w-3.5 h-3.5" />
+                        <span>追加</span>
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Groups */}
         {groupRooms.length > 0 && (

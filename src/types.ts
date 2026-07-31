@@ -6,6 +6,7 @@ export interface User {
   isOfficial?: boolean;
   isOnline?: boolean;
   lastSeen?: string;
+  friendIds?: string[];
 }
 
 export type MessageType = 'text' | 'sticker' | 'image' | 'video' | 'voice' | 'system';

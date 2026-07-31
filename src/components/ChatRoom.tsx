@@ -29,7 +29,6 @@ import {
   BellOff,
   Images,
   FolderPlus,
-  MapPin,
   Copy,
   RotateCcw,
   Trash2,
@@ -386,21 +385,6 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
                 <div className="flex items-center gap-2.5">
                   <FolderPlus className="w-4 h-4 text-emerald-600" />
                   <span>アルバムの作成・閲覧</span>
-                </div>
-                <ChevronRight className="w-4 h-4 text-slate-400" />
-              </button>
-
-              <button
-                onClick={() => {
-                  setShowChatMenu(false);
-                  alert('位置情報の共有リンクを送信しました');
-                  onSendMessage('text', '📍 位置情報を共有しました: 東京都千代田区1-1');
-                }}
-                className="w-full p-3 text-left font-bold text-xs text-slate-800 hover:bg-slate-100 rounded-xl flex items-center justify-between transition cursor-pointer"
-              >
-                <div className="flex items-center gap-2.5">
-                  <MapPin className="w-4 h-4 text-red-500" />
-                  <span>位置情報を共有</span>
                 </div>
                 <ChevronRight className="w-4 h-4 text-slate-400" />
               </button>

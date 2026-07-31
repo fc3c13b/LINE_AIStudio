@@ -21,58 +21,27 @@ import {
   FileAudio
 } from 'lucide-react';
 
-// Sample demo music tracks (royalty-free preview sounds)
-const INITIAL_MUSIC_LIST: MusicItem[] = [
-  {
-    id: 'music-1',
-    title: 'Acoustic Breeze',
-    artist: 'Benjamin Tissot',
-    album: 'Acoustic Sessions',
-    duration: 157,
-    url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
-    coverUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&auto=format&fit=crop&q=80',
-    format: 'MP3',
-    fileSize: '3.8 MB',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'music-2',
-    title: 'Chill Lounge Beat',
-    artist: 'Lo-Fi Dreams',
-    album: 'Night Vibes',
-    duration: 210,
-    url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3',
-    coverUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=300&auto=format&fit=crop&q=80',
-    format: 'M4A',
-    fileSize: '4.2 MB',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'music-3',
-    title: 'Piano & Strings Serenade',
-    artist: 'Classical Modern',
-    album: 'Harmony Collection',
-    duration: 184,
-    url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3',
-    coverUrl: 'https://images.unsplash.com/photo-1520523839897-bd0b52f945a0?w=300&auto=format&fit=crop&q=80',
-    format: 'FLAC',
-    fileSize: '12.5 MB',
-    createdAt: new Date().toISOString(),
-  },
-];
+// Sample initial music tracks (empty by default)
+const INITIAL_MUSIC_LIST: MusicItem[] = [];
 
 interface MusicTabProps {
   isLoggedIn?: boolean;
 }
 
 export const MusicTab: React.FC<MusicTabProps> = () => {
-  // Saved music state from localStorage or initial list
+  // Saved music state from localStorage or initial empty list
   const [musicList, setMusicList] = useState<MusicItem[]>(() => {
     try {
       const saved = localStorage.getItem('line_app_music_list');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) {
+          // Remove legacy sample tracks if any
+          const filtered = parsed.filter(
+            (item: MusicItem) => !['music-1', 'music-2', 'music-3'].includes(item.id)
+          );
+          return filtered;
+        }
       }
     } catch (e) {
       console.error('Failed to parse music list:', e);
@@ -264,7 +233,7 @@ export const MusicTab: React.FC<MusicTabProps> = () => {
 
     setIsUploading(true);
 
-    Array.from(files).forEach((file) => {
+    Array.from(files).forEach((file: File) => {
       const extension = file.name.split('.').pop()?.toUpperCase() || 'AUDIO';
       const fileUrl = URL.createObjectURL(file);
 
