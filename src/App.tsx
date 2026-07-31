@@ -8,9 +8,12 @@ import { ChatRoom as ChatRoomComponent } from './components/ChatRoom';
 import { CallScreen } from './components/CallScreen';
 import { SettingsTab } from './components/SettingsTab';
 import { AlbumTab } from './components/AlbumTab';
+import { MusicTab } from './components/MusicTab';
 import { NewChatModal } from './components/NewChatModal';
 import { AuthModal } from './components/AuthModal';
-import { Home, MessageSquare, Images, Settings as SettingsIcon } from 'lucide-react';
+import { LockScreen } from './components/LockScreen';
+import { UnauthenticatedGuard } from './components/UnauthenticatedGuard';
+import { Home, MessageSquare, Images, Music, Settings as SettingsIcon } from 'lucide-react';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>('chats');
@@ -40,6 +43,23 @@ export default function App() {
     }
   });
 
+  // Screen lock state
+  const [isAppLocked, setIsAppLocked] = useState(false);
+
+  // Lock screen when page/tab is hidden
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden && account) {
+        setIsAppLocked(true);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [account]);
+
   const [activeUserId, setActiveUserId] = useState<string>(() => account?.id || 'user-me');
 
   const me: User = users.find((u) => u.id === activeUserId) || {
@@ -56,6 +76,7 @@ export default function App() {
       localStorage.setItem('line_app_account', JSON.stringify(accountInfo));
     }
     setActiveUserId(user.id);
+    setIsAppLocked(false);
     fetchData();
   };
 
@@ -63,6 +84,7 @@ export default function App() {
     setAccount(null);
     localStorage.removeItem('line_app_account');
     setActiveUserId('user-me');
+    setIsAppLocked(false);
   };
 
   // 1. Initial REST fetch
@@ -284,8 +306,21 @@ export default function App() {
 
   return (
     <SmartphoneFrame isConnected={isConnected}>
-      {/* If Chat Room is Active, render full ChatRoom */}
-      {activeRoomId && currentRoom ? (
+      {!account ? (
+        /* 未ログイン時のガード画面 */
+        <UnauthenticatedGuard
+          onOpenAuthModal={(mode) => setAuthModalState({ isOpen: true, mode })}
+        />
+      ) : isAppLocked ? (
+        /* 画面ロック時のパスワード解除画面 */
+        <LockScreen
+          user={me}
+          account={account}
+          onUnlock={() => setIsAppLocked(false)}
+          onLogout={handleLogout}
+        />
+      ) : activeRoomId && currentRoom ? (
+        /* If Chat Room is Active, render full ChatRoom */
         <ChatRoomComponent
           room={currentRoom}
           currentUser={me}
@@ -334,6 +369,12 @@ export default function App() {
             />
           )}
 
+          {activeTab === 'music' && (
+            <MusicTab
+              isLoggedIn={!!account}
+            />
+          )}
+
           {activeTab === 'settings' && (
             <SettingsTab
               currentUser={me}
@@ -344,6 +385,7 @@ export default function App() {
                 setAuthModalState({ isOpen: true, mode })
               }
               onLogout={handleLogout}
+              onLockApp={() => setIsAppLocked(true)}
               isConnected={isConnected}
             />
           )}
@@ -385,6 +427,16 @@ export default function App() {
             >
               <Images className="w-5 h-5" />
               <span className="text-[10px]">アルバム</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('music')}
+              className={`flex flex-col items-center gap-1 flex-1 py-1 transition ${
+                activeTab === 'music' ? 'text-[#00c300] font-bold' : 'text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              <Music className="w-5 h-5" />
+              <span className="text-[10px]">音楽</span>
             </button>
 
             <button

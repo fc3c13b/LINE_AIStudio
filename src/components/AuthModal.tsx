@@ -1,14 +1,12 @@
 import React, { useState } from 'react';
 import { User } from '../types';
-import { X, LogIn, KeyRound, Mail, Lock, AlertCircle } from 'lucide-react';
-
-type Mode = 'login' | 'register' | 'forgot' | 'reset';
+import { X, UserPlus, LogIn, KeyRound, Mail, User as UserIcon, Lock, CheckCircle2, AlertCircle } from 'lucide-react';
 
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (user: User) => void;
-  initialMode?: Mode;
+  onSuccess: (user: User, accountInfo?: { name: string; email: string }) => void;
+  initialMode?: 'login' | 'register' | 'forgot';
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
@@ -17,158 +15,267 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onSuccess,
   initialMode = 'login',
 }) => {
-  if (!isOpen) return null;
+  const [mode, setMode] = useState<'login' | 'register' | 'forgot' | 'reset'>(initialMode);
 
-  const [mode, setMode] = useState<Mode>(initialMode);
+  // Form states
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  
+  // Password reset states
+  const [resetCode, setResetCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [devCode, setDevCode] = useState<string | null>(null);
 
-  // Simple safe JSON helper
-  const safeJson = async (res: Response) => {
-    try {
-      return await res.json();
-    } catch {
-      const text = await res.text().catch(() => '');
-      return { __raw__: true, error: text || '不明なエラー' };
-    }
+  // Status & error states
+  const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  if (!isOpen) return null;
+
+  const resetMessages = () => {
+    setError(null);
+    setSuccessMessage(null);
   };
 
-  // Login handler (wired to backend)
+  const switchMode = (newMode: 'login' | 'register' | 'forgot' | 'reset') => {
+    setMode(newMode);
+    resetMessages();
+  };
+
+  // 1. Login Submit
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
-    setLoading(true);
+    resetMessages();
+    setIsLoading(true);
+
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
-      const data = await safeJson(res);
-      if (!res.ok) throw new Error(data?.error || 'ログインに失敗しました');
-      onSuccess(data.user);
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'ログインに失敗しました');
+      }
+
+      onSuccess(data.user, data.account);
+      onClose();
     } catch (err: any) {
       setError(err.message || '通信エラーが発生しました');
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
-  // Register handler: safe stub so UI never breaks; can be wired later
-  const handleRegister = async (_e: React.FormEvent) => {
-    _e.preventDefault();
-    setError('この機能は現在準備中です。管理者に連絡してください。');
+  // 2. Register Submit
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    resetMessages();
+    setIsLoading(true);
+
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, password }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'アカウント登録に失敗しました');
+      }
+
+      setSuccessMessage('アカウントが正常に登録されました！');
+      setTimeout(() => {
+        onSuccess(data.user, data.account);
+        onClose();
+      }, 1000);
+    } catch (err: any) {
+      setError(err.message || '通信エラーが発生しました');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  // Forgot password: safe stub
-  const handleForgotPassword = async (_e: React.FormEvent) => {
-    _e.preventDefault();
-    setError('この機能は現在準備中です。管理者に連絡してください。');
+  // 3. Request Password Reset Code
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    resetMessages();
+    setIsLoading(true);
+
+    try {
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || '再設定コードの発行に失敗しました');
+      }
+
+      setSuccessMessage(data.message);
+      if (data.devCode) {
+        setDevCode(data.devCode);
+        setResetCode(data.devCode);
+      }
+      setMode('reset');
+    } catch (err: any) {
+      setError(err.message || '通信エラーが発生しました');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  // Reset password: safe stub
-  const handleResetPassword = async (_e: React.FormEvent) => {
-    _e.preventDefault();
-    setError('この機能は現在準備中です。管理者に連絡してください。');
+  // 4. Complete Password Reset
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    resetMessages();
+    setIsLoading(true);
+
+    try {
+      const res = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, code: resetCode, newPassword }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'パスワードの再設定に失敗しました');
+      }
+
+      setSuccessMessage(data.message);
+      setTimeout(() => {
+        setMode('login');
+        setPassword('');
+        setNewPassword('');
+        setResetCode('');
+        setDevCode(null);
+        resetMessages();
+      }, 2000);
+    } catch (err: any) {
+      setError(err.message || '通信エラーが発生しました');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-sm bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-800 overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+      <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-2xl overflow-hidden border border-slate-100 dark:border-slate-800 transition-all">
         {/* Header */}
-        <div className="relative bg-gradient-to-r from-emerald-500 to-teal-600 p-4 text-white text-center">
-          <button onClick={onClose} className="absolute top-3 right-3 p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition">
-            <X className="w-4 h-4" />
+        <div className="relative bg-gradient-to-r from-emerald-500 to-teal-600 p-6 text-white text-center">
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition text-white"
+          >
+            <X className="w-5 h-5" />
           </button>
-
-          <div className="mx-auto mb-2 w-10 h-10 flex items-center justify-center rounded-xl bg-white/20">
-            {mode === 'login' && <LogIn className="w-5 h-5 text-white" />}
-            {(mode === 'forgot' || mode === 'reset') && <KeyRound className="w-5 h-5 text-white" />}
+          
+          <div className="w-12 h-12 mx-auto mb-3 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-md">
+            {mode === 'login' && <LogIn className="w-6 h-6 text-white" />}
+            {mode === 'register' && <UserPlus className="w-6 h-6 text-white" />}
+            {(mode === 'forgot' || mode === 'reset') && <KeyRound className="w-6 h-6 text-white" />}
           </div>
-
-          <h2 className="text-lg font-semibold">
+          
+          <h2 className="text-xl font-bold">
             {mode === 'login' && 'LINE アカウント ログイン'}
             {mode === 'register' && '新規アカウント登録'}
             {mode === 'forgot' && 'パスワードをお忘れの方'}
             {mode === 'reset' && '新しいパスワードの設定'}
           </h2>
-
-          <p className="text-[10px] text-emerald-100 mt-0.5">
+          <p className="text-xs text-emerald-100 mt-1">
             {mode === 'login' && 'メールアドレスとパスワードでログインしてください'}
-            {mode === 'register' && 'アカウントを作成し、LINE AIStudio を利用できます'}
+            {mode === 'register' && 'ユーザー名・メールアドレス・パスワードを入力'}
             {mode === 'forgot' && '登録したメールアドレスに再設定コードを送信します'}
-            {mode === 'reset' && '受取ったコードと新しいパスワードを入力してください'}
+            {mode === 'reset' && '受診したコードと新しいパスワードを入力してください'}
           </p>
         </div>
 
-        {/* Body */}
-        <div className="p-4">
+        {/* Content Body */}
+        <div className="p-6">
+          {/* Error / Success Notifications */}
           {error && (
-            <div className="mb-3 flex items-start gap-2 text-[10px] p-2 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300">
-              <AlertCircle className="w-3.5 h-3.5 mt-px shrink-0" />
+            <div className="mb-4 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 flex items-start gap-2.5 text-rose-700 dark:text-rose-300 text-xs">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-500" />
               <span>{error}</span>
             </div>
           )}
 
-          {/* LOGIN */}
+          {successMessage && (
+            <div className="mb-4 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 flex items-start gap-2.5 text-emerald-700 dark:text-emerald-300 text-xs">
+              <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-500" />
+              <span>{successMessage}</span>
+            </div>
+          )}
+
+          {/* MODE 1: LOGIN */}
           {mode === 'login' && (
-            <form onSubmit={handleLogin} className="space-y-3">
+            <form onSubmit={handleLogin} className="space-y-4">
               <div>
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 block">メールアドレス</label>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  メールアドレス
+                </label>
                 <div className="relative">
-                  <Mail className="absolute left-2.5 top-2 w-4 h-4 text-slate-400" />
+                  <Mail className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
                   <input
                     type="email"
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="example@line.app"
-                    className="w-full pl-8 pr-2 py-1.5 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
                   />
                 </div>
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">パスワード</label>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    パスワード
+                  </label>
                   <button
                     type="button"
-                    onClick={() => { setMode('forgot'); setError(null); }}
-                    className="text-[10px] text-emerald-600 hover:underline"
+                    onClick={() => switchMode('forgot')}
+                    className="text-xs text-emerald-600 dark:text-emerald-400 hover:underline font-medium"
                   >
                     パスワードをお忘れですか？
                   </button>
                 </div>
                 <div className="relative">
-                  <Lock className="absolute left-2.5 top-2 w-4 h-4 text-slate-400" />
+                  <Lock className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
                   <input
                     type="password"
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full pl-8 pr-2 py-1.5 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
                   />
                 </div>
               </div>
 
               <button
                 type="submit"
-                disabled={loading}
-                className="w-full py-2 text-sm font-semibold rounded-lg bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white shadow-md shadow-emerald-500/20 transition disabled:opacity-50 mt-1"
+                disabled={isLoading}
+                className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white font-semibold rounded-xl text-sm shadow-md shadow-emerald-500/20 transition disabled:opacity-50 mt-2"
               >
-                {loading ? 'ログイン中...' : 'ログイン'}
+                {isLoading ? 'ログイン中...' : 'ログイン'}
               </button>
 
-              <div className="text-center pt-1 border-t border-slate-100 dark:border-slate-800">
-                <p className="text-[10px] text-slate-500">
+              <div className="text-center pt-2 border-t border-slate-100 dark:border-slate-800">
+                <p className="text-xs text-slate-500">
                   アカウントをお持ちでないですか？{' '}
                   <button
                     type="button"
-                    onClick={() => { setMode('register'); setError(null); }}
-                    className="text-emerald-600 font-semibold hover:underline"
+                    onClick={() => switchMode('register')}
+                    className="text-emerald-600 dark:text-emerald-400 font-semibold hover:underline"
                   >
                     新規登録はこちら
                   </button>
@@ -177,112 +284,184 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </form>
           )}
 
-          {/* REGISTER (UI only; behavior via stub) */}
+          {/* MODE 2: REGISTER */}
           {mode === 'register' && (
-            <form onSubmit={handleRegister} className="space-y-3">
+            <form onSubmit={handleRegister} className="space-y-4">
               <div>
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 block">メールアドレス</label>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  ユーザー名 (LINE表示名)
+                </label>
                 <div className="relative">
-                  <Mail className="absolute left-2.5 top-2 w-4 h-4 text-slate-400" />
+                  <UserIcon className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    required
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="例: 山田 太郎"
+                    className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  メールアドレス
+                </label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
                   <input
                     type="email"
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="example@line.app"
-                    className="w-full pl-8 pr-2 py-1.5 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
                   />
                 </div>
               </div>
 
-              <button
-                type="submit"
-                className="w-full py-2 text-sm font-semibold rounded-lg bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white shadow-md shadow-emerald-500/20 transition mt-1"
-              >
-                登録（準備中）
-              </button>
-
-              <div className="text-center pt-1 border-t border-slate-100 dark:border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => { setMode('login'); setError(null); }}
-                  className="text-[10px] text-slate-500 hover:text-slate-700 font-medium"
-                >
-                  ログイン画面に戻る
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* FORGOT PASSWORD (stub) */}
-          {mode === 'forgot' && (
-            <form onSubmit={handleForgotPassword} className="space-y-3">
               <div>
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 block">メールアドレス</label>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  パスワード (6文字以上)
+                </label>
                 <div className="relative">
-                  <Mail className="absolute left-2.5 top-2 w-4 h-4 text-slate-400" />
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="example@line.app"
-                    className="w-full pl-8 pr-2 py-1.5 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full py-2 text-sm font-semibold rounded-lg bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white shadow-md shadow-emerald-500/20 transition mt-1"
-              >
-                再設定コードを発行（準備中）
-              </button>
-
-              <div className="text-center pt-1 border-t border-slate-100 dark:border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => { setMode('login'); setError(null); }}
-                  className="text-[10px] text-slate-500 hover:text-slate-700 font-medium"
-                >
-                  ログイン画面に戻る
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* RESET PASSWORD (stub) */}
-          {mode === 'reset' && (
-            <form onSubmit={handleResetPassword} className="space-y-3">
-              <div>
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 block">新しいパスワード</label>
-                <div className="relative">
-                  <Lock className="absolute left-2.5 top-2 w-4 h-4 text-slate-400" />
+                  <Lock className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
                   <input
                     type="password"
                     required
+                    minLength={6}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full pl-8 pr-2 py-1.5 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
                   />
                 </div>
               </div>
 
               <button
                 type="submit"
-                className="w-full py-2 text-sm font-semibold rounded-lg bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white shadow-md shadow-emerald-500/20 transition mt-1"
+                disabled={isLoading}
+                className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white font-semibold rounded-xl text-sm shadow-md shadow-emerald-500/20 transition disabled:opacity-50 mt-2"
               >
-                パスワードを変更（準備中）
+                {isLoading ? 'アカウント作成中...' : 'アカウントを作成する'}
               </button>
 
-              <div className="text-center pt-1 border-t border-slate-100 dark:border-slate-800">
+              <div className="text-center pt-2 border-t border-slate-100 dark:border-slate-800">
+                <p className="text-xs text-slate-500">
+                  既にアカウントをお持ちですか？{' '}
+                  <button
+                    type="button"
+                    onClick={() => switchMode('login')}
+                    className="text-emerald-600 dark:text-emerald-400 font-semibold hover:underline"
+                  >
+                    ログインはこちら
+                  </button>
+                </p>
+              </div>
+            </form>
+          )}
+
+          {/* MODE 3: FORGOT PASSWORD */}
+          {mode === 'forgot' && (
+            <form onSubmit={handleForgotPassword} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  登録したメールアドレス
+                </label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="example@line.app"
+                    className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white font-semibold rounded-xl text-sm shadow-md shadow-emerald-500/20 transition disabled:opacity-50 mt-2"
+              >
+                {isLoading ? '送信中...' : '再設定コードを発行する'}
+              </button>
+
+              <div className="text-center pt-2 border-t border-slate-100 dark:border-slate-800">
                 <button
                   type="button"
-                  onClick={() => { setMode('login'); setError(null); }}
-                  className="text-[10px] text-slate-500 hover:text-slate-700 font-medium"
+                  onClick={() => switchMode('login')}
+                  className="text-xs text-slate-500 hover:text-slate-700 font-medium"
                 >
                   ログイン画面に戻る
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* MODE 4: RESET PASSWORD */}
+          {mode === 'reset' && (
+            <form onSubmit={handleResetPassword} className="space-y-4">
+              {devCode && (
+                <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl text-xs text-amber-800 dark:text-amber-200">
+                  <span className="font-bold">【テスト用表示】</span> 再設定コード: <span className="font-mono font-bold text-sm bg-amber-100 dark:bg-amber-900 px-2 py-0.5 rounded tracking-widest">{devCode}</span>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  再設定コード (6桁)
+                </label>
+                <div className="relative">
+                  <KeyRound className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    required
+                    maxLength={6}
+                    value={resetCode}
+                    onChange={(e) => setResetCode(e.target.value)}
+                    placeholder="123456"
+                    className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-mono tracking-wider focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  新しいパスワード (6文字以上)
+                </label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                  <input
+                    type="password"
+                    required
+                    minLength={6}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="新しいパスワード"
+                    className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white font-semibold rounded-xl text-sm shadow-md shadow-emerald-500/20 transition disabled:opacity-50 mt-2"
+              >
+                {isLoading ? '更新中...' : 'パスワードを変更してログイン'}
+              </button>
+
+              <div className="text-center pt-2 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => switchMode('login')}
+                  className="text-xs text-slate-500 hover:text-slate-700 font-medium"
+                >
+                  キャンセルしてログイン画面へ
                 </button>
               </div>
             </form>
@@ -292,5 +471,3 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     </div>
   );
 };
-
-export default AuthModal;

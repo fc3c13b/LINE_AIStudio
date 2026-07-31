@@ -459,6 +459,32 @@ app.post('/api/auth/login', (req, res) => {
   });
 });
 
+app.post('/api/auth/verify-password', (req, res) => {
+  const { email, accountId, password } = req.body;
+
+  if (!password) {
+    return res.status(400).json({ error: 'パスワードを入力してください。' });
+  }
+
+  let account;
+  if (email) {
+    const normalizedEmail = email.trim().toLowerCase();
+    account = db.accounts.find((a) => a.email.toLowerCase() === normalizedEmail);
+  } else if (accountId) {
+    account = db.accounts.find((a) => a.id === accountId);
+  }
+
+  if (!account) {
+    return res.status(404).json({ error: 'アカウントが見つかりません。' });
+  }
+
+  if (!verifyPassword(password, account.passwordHash, account.salt)) {
+    return res.status(401).json({ error: 'パスワードが正しくありません。' });
+  }
+
+  return res.json({ success: true, message: 'パスワード照合成功' });
+});
+
 app.post('/api/auth/forgot-password', (req, res) => {
   const { email } = req.body;
 

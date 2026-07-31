@@ -47,7 +47,20 @@ export interface Sticker {
   imageUrl: string;
 }
 
-export type TabType = 'home' | 'chats' | 'album' | 'settings';
+export interface MusicItem {
+  id: string;
+  title: string;
+  artist: string;
+  album?: string;
+  duration: number; // in seconds
+  url: string; // Blob URL, Data URL, or remote URL
+  coverUrl?: string;
+  format: string; // 'mp3' | 'mp4' | 'm4a' | 'flac' | string
+  fileSize?: string;
+  createdAt: string;
+}
+
+export type TabType = 'home' | 'chats' | 'album' | 'music' | 'settings';
 
 export interface CallState {
   isActive: boolean;

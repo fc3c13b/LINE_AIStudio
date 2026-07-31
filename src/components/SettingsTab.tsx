@@ -8,6 +8,7 @@ import {
   LogIn,
   LogOut,
   KeyRound,
+  Lock,
   Smartphone,
   Download,
   Globe,
@@ -22,6 +23,7 @@ interface SettingsTabProps {
   onResetDatabase: () => void;
   onOpenAuthModal: (mode?: 'login' | 'register' | 'forgot') => void;
   onLogout: () => void;
+  onLockApp?: () => void;
   isConnected: boolean;
 }
 
@@ -32,6 +34,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
   onResetDatabase,
   onOpenAuthModal,
   onLogout,
+  onLockApp,
   isConnected,
 }) => {
   const [name, setName] = useState(currentUser.name);
@@ -113,13 +116,24 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
                 </button>
               </div>
 
-              <button
-                onClick={onLogout}
-                className="w-full py-2 bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-600 font-bold text-xs rounded-xl transition border border-slate-200 flex items-center justify-center gap-1.5"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-                ログアウト
-              </button>
+              <div className="flex gap-2">
+                {onLockApp && (
+                  <button
+                    onClick={onLockApp}
+                    className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl transition shadow-sm flex items-center justify-center gap-1.5"
+                  >
+                    <Lock className="w-3.5 h-3.5 text-emerald-400" />
+                    今すぐロック
+                  </button>
+                )}
+                <button
+                  onClick={onLogout}
+                  className="flex-1 py-2 bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-600 font-bold text-xs rounded-xl transition border border-slate-200 flex items-center justify-center gap-1.5"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  ログアウト
+                </button>
+              </div>
             </div>
           ) : (
             <div className="space-y-3">
