@@ -1,0 +1,14 @@
+0000000000000000000000000000000000000000 644b5c5f64d1036cdabf9a71e25d16927c3fd19f Michihiro Okada <fc3c13b@gmail.com> 1785394501 +0900	branch: Created from origin/main
+644b5c5f64d1036cdabf9a71e25d16927c3fd19f 644b5c5f64d1036cdabf9a71e25d16927c3fd19f Michihiro Okada <fc3c13b@gmail.com> 1785394501 +0900	checkout: moving from master to master
+644b5c5f64d1036cdabf9a71e25d16927c3fd19f 0b5c4e62b8cb91e5ec2380f2e3a798306bfef071 Michihiro Okada <fc3c13b@gmail.com> 1785463188 +0900	commit: feat: add Capacitor Android setup, fix AuthModal and deps
+0b5c4e62b8cb91e5ec2380f2e3a798306bfef071 0ddc778670be42d3d052f2a9ad6a000e2ff393da Michihiro Okada <fc3c13b@gmail.com> 1785472041 +0900	commit: feat: UI and chat refactoring — VER 0.1.0
+0ddc778670be42d3d052f2a9ad6a000e2ff393da 0000000000000000000000000000000000000000 fc3c13b <fc3c13b@gmail.com> 1785489226 +0900	Branch: renamed refs/heads/master to refs/heads/main
+0000000000000000000000000000000000000000 0ddc778670be42d3d052f2a9ad6a000e2ff393da fc3c13b <fc3c13b@gmail.com> 1785489226 +0900	Branch: renamed refs/heads/master to refs/heads/main
+0ddc778670be42d3d052f2a9ad6a000e2ff393da ef20a8f3b684149065e91708e9b81c6ab7bcc9f7 fc3c13b <fc3c13b@gmail.com> 1785489226 +0900	commit: refactor: プロジェクト構成の初期化およびコンポーネントの再構築
+ef20a8f3b684149065e91708e9b81c6ab7bcc9f7 0000000000000000000000000000000000000000 fc3c13b <fc3c13b@gmail.com> 1785494765 +0900	Branch: renamed refs/heads/main to refs/heads/main
+ef20a8f3b684149065e91708e9b81c6ab7bcc9f7 ef20a8f3b684149065e91708e9b81c6ab7bcc9f7 fc3c13b <fc3c13b@gmail.com> 1785494765 +0900	Branch: renamed refs/heads/main to refs/heads/main
+ef20a8f3b684149065e91708e9b81c6ab7bcc9f7 fb5c2efd10c6aaa4e40f4c7c66c5a9fd48a1bd97 fc3c13b <fc3c13b@gmail.com> 1785494765 +0900	commit: feat(friend): 新規登録時の初期友達数を0人に変更し友達検索・追加機能を実装
+fb5c2efd10c6aaa4e40f4c7c66c5a9fd48a1bd97 0000000000000000000000000000000000000000 fc3c13b <fc3c13b@gmail.com> 1785495729 +0900	Branch: renamed refs/heads/main to refs/heads/main
+fb5c2efd10c6aaa4e40f4c7c66c5a9fd48a1bd97 fb5c2efd10c6aaa4e40f4c7c66c5a9fd48a1bd97 fc3c13b <fc3c13b@gmail.com> 1785495729 +0900	Branch: renamed refs/heads/main to refs/heads/main
+fb5c2efd10c6aaa4e40f4c7c66c5a9fd48a1bd97 0000000000000000000000000000000000000000 fc3c13b <fc3c13b@gmail.com> 1785496157 +0900	Branch: renamed refs/heads/main to refs/heads/main
+fb5c2efd10c6aaa4e40f4c7c66c5a9fd48a1bd97 fb5c2efd10c6aaa4e40f4c7c66c5a9fd48a1bd97 fc3c13b <fc3c13b@gmail.com> 1785496157 +0900	Branch: renamed refs/heads/main to refs/heads/main
