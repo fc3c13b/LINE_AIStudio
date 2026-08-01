@@ -15,10 +15,11 @@ import {
   Send,
 } from 'lucide-react';
 import { User } from '../types';
+import { apiUrl, readApiResponse } from '../services/api';
 
 interface LockScreenProps {
   user: User;
-  account: { id: string; name: string; email: string };
+  account: { id: string; name: string; email?: string };
   onUnlock: () => void;
   onLogout: () => void;
 }
@@ -57,17 +58,16 @@ export const LockScreen: React.FC<LockScreenProps> = ({
     setIsLoading(true);
 
     try {
-      const res = await fetch('/api/auth/verify-password', {
+      const res = await fetch(apiUrl('/api/auth/verify-password'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: account.email,
           accountId: account.id,
           password,
         }),
       });
 
-      const data = await res.json();
+      const data = await readApiResponse<any>(res);
 
       if (!res.ok) {
         throw new Error(data.error || 'パスワードが正しくありません');
@@ -91,7 +91,7 @@ export const LockScreen: React.FC<LockScreenProps> = ({
     setIsLoading(true);
 
     try {
-      const res = await fetch('/api/auth/forgot-password', {
+      const res = await fetch(apiUrl('/api/auth/forgot-password'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: account.email }),
@@ -132,7 +132,7 @@ export const LockScreen: React.FC<LockScreenProps> = ({
     setIsLoading(true);
 
     try {
-      const res = await fetch('/api/auth/reset-password', {
+      const res = await fetch(apiUrl('/api/auth/reset-password'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

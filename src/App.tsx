@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, ChatRoom, Message, TabType, CallState, WSMessagePayload } from './types';
 import { wsService } from './services/websocket';
+import { apiUrl, readApiResponse } from './services/api';
 import { SmartphoneFrame } from './components/SmartphoneFrame';
 import { HomeTab } from './components/HomeTab';
 import { ChatsTab } from './components/ChatsTab';
@@ -32,7 +33,7 @@ export default function App() {
     mode: 'login' | 'register' | 'forgot';
   }>({ isOpen: false, mode: 'login' });
 
-  const [account, setAccount] = useState<{ id: string; name: string; email: string } | null>(() => {
+  const [account, setAccount] = useState<{ id: string; name: string; email?: string } | null>(() => {
     try {
       const saved = localStorage.getItem('line_app_account');
       return saved ? JSON.parse(saved) : null;
@@ -68,7 +69,7 @@ export default function App() {
     isOnline: true,
   };
 
-  const handleAuthSuccess = (user: User, accountInfo?: { id: string; name: string; email: string }) => {
+  const handleAuthSuccess = (user: User, accountInfo?: { id: string; name: string; email?: string }) => {
     if (accountInfo) {
       setAccount(accountInfo);
       localStorage.setItem('line_app_account', JSON.stringify(accountInfo));
@@ -89,8 +90,8 @@ export default function App() {
   const fetchData = async () => {
     try {
       const [usersRes, roomsRes] = await Promise.all([
-        fetch('/api/users').then((r) => r.json()),
-        fetch('/api/rooms').then((r) => r.json()),
+        fetch(apiUrl('/api/users')).then((response) => readApiResponse<User[]>(response)),
+        fetch(apiUrl('/api/rooms')).then((response) => readApiResponse<ChatRoom[]>(response)),
       ]);
 
       setUsers(usersRes);
@@ -98,8 +99,8 @@ export default function App() {
 
       // Fetch messages for initial rooms
       for (const room of roomsRes) {
-        fetch(`/api/rooms/${room.id}/messages`)
-          .then((r) => r.json())
+        fetch(apiUrl(`/api/rooms/${room.id}/messages`))
+          .then((response) => readApiResponse<Message[]>(response))
           .then((msgs) => {
             setRoomMessages((prev) => ({ ...prev, [room.id]: msgs }));
           });
@@ -244,7 +245,7 @@ export default function App() {
   // Add Friend
   const handleAddFriend = async (friendId: string) => {
     try {
-      const res = await fetch('/api/users/add-friend', {
+      const res = await fetch(apiUrl('/api/users/add-friend'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: me.id, friendId }),
@@ -260,7 +261,7 @@ export default function App() {
   // Remove Friend
   const handleRemoveFriend = async (friendId: string) => {
     try {
-      const res = await fetch('/api/users/remove-friend', {
+      const res = await fetch(apiUrl('/api/users/remove-friend'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: me.id, friendId }),
@@ -283,7 +284,7 @@ export default function App() {
         }
       }
 
-      const res = await fetch('/api/rooms', {
+      const res = await fetch(apiUrl('/api/rooms'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, memberIds, isGroup }),
@@ -299,7 +300,7 @@ export default function App() {
   // Update Profile
   const handleUpdateProfile = async (name: string, statusMessage: string, avatar: string) => {
     try {
-      const res = await fetch('/api/users/profile', {
+      const res = await fetch(apiUrl('/api/users/profile'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, statusMessage, avatar }),
@@ -314,7 +315,7 @@ export default function App() {
   // Reset Database
   const handleResetDatabase = async () => {
     try {
-      await fetch('/api/seed/reset', { method: 'POST' });
+      await fetch(apiUrl('/api/seed/reset'), { method: 'POST' });
       fetchData();
     } catch (err) {
       console.error('Error resetting database:', err);

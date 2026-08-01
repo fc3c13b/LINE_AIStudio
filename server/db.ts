@@ -13,6 +13,7 @@ if (!fs.existsSync(path.dirname(DB_FILE))) {
 export interface Account {
   id: string;
   name: string;
+  // Retained for compatibility with older records. New username-based accounts store an empty value.
   email: string;
   passwordHash: string;
   salt: string;

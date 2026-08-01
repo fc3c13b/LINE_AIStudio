@@ -1,4 +1,5 @@
 import { WSMessagePayload } from '../types';
+import { API_BASE_URL } from './api';
 
 type Listener = (data: WSMessagePayload) => void;
 
@@ -16,8 +17,9 @@ class WebSocketService {
     if (this.isConnecting) return;
     this.isConnecting = true;
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}`;
+    const wsUrl = API_BASE_URL
+      ? API_BASE_URL.replace(/^http/, 'ws')
+      : `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`;
 
     try {
       this.socket = new WebSocket(wsUrl);

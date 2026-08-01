@@ -9,12 +9,12 @@ interface ModalsContainerProps {
   users: User[];
   currentUser: User;
   onCloseNewChatModal: () => void;
-  onCreateRoom: (memberIds: string[], roomName?: string, isGroup?: boolean) => void;
+  onCreateRoom: (name: string, memberIds: string[], isGroup: boolean) => void;
   callState: CallState | null;
   onEndCall: () => void;
   authModalState: { isOpen: boolean; mode: 'login' | 'register' | 'forgot' };
   onCloseAuthModal: () => void;
-  onAuthSuccess: (user: User, account: { id: string; name: string; email: string }) => void;
+  onAuthSuccess: (user: User, account: { id: string; name: string; email?: string }) => void;
 }
 
 export const ModalsContainer: React.FC<ModalsContainerProps> = ({

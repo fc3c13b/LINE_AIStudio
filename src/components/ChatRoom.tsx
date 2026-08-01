@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { ChatRoom as ChatRoomType, Message, User, Sticker } from '../types';
+import { apiUrl } from '../services/api';
 import { STICKER_SETS } from '../data/stickers';
 import {
   ChevronLeft,
@@ -167,7 +168,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
         const isVideo = file.type.startsWith('video');
 
         try {
-          const res = await fetch('/api/upload', {
+          const res = await fetch(apiUrl('/api/upload'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ fileName: file.name, dataUrl }),

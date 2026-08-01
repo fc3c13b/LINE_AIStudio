@@ -6,15 +6,15 @@ export const authRouter = express.Router();
 
 // ユーザー新規登録
 authRouter.post('/register', (req, res) => {
-  const { name, email, password } = req.body;
+  const { name, password } = req.body;
 
-  if (!name || !email || !password) {
-    return res.status(400).json({ error: 'ユーザー名、メールアドレス、パスワードをすべて入力してください。' });
+  if (!name || !password) {
+    return res.status(400).json({ error: 'ユーザー名とパスワードを入力してください。' });
   }
 
-  const normalizedEmail = email.trim().toLowerCase();
-  if (db.accounts.some((a) => a.email.toLowerCase() === normalizedEmail)) {
-    return res.status(400).json({ error: 'このメールアドレスは既に登録されています。' });
+  const normalizedName = name.trim().toLocaleLowerCase();
+  if (db.accounts.some((a) => a.name.trim().toLocaleLowerCase() === normalizedName)) {
+    return res.status(400).json({ error: 'このユーザー名は既に登録されています。' });
   }
 
   if (password.length < 6) {
@@ -27,7 +27,7 @@ authRouter.post('/register', (req, res) => {
   const newAccount: Account = {
     id: userId,
     name: name.trim(),
-    email: normalizedEmail,
+    email: '',
     passwordHash: hash,
     salt,
     createdAt: new Date().toISOString(),
@@ -46,27 +46,27 @@ authRouter.post('/register', (req, res) => {
   db.users.push(newUser);
   saveDatabase();
 
-  console.log(`[AUTH] Registered new user: ${name} (${normalizedEmail})`);
+  console.log(`[AUTH] Registered new user: ${name}`);
 
   res.json({
     user: newUser,
-    account: { id: newAccount.id, name: newAccount.name, email: newAccount.email },
+    account: { id: newAccount.id, name: newAccount.name },
   });
 });
 
 // ログイン
 authRouter.post('/login', (req, res) => {
-  const { email, password } = req.body;
+  const { name, password } = req.body;
 
-  if (!email || !password) {
-    return res.status(400).json({ error: 'メールアドレスとパスワードを入力してください。' });
+  if (!name || !password) {
+    return res.status(400).json({ error: 'ユーザー名とパスワードを入力してください。' });
   }
 
-  const normalizedEmail = email.trim().toLowerCase();
-  const account = db.accounts.find((a) => a.email.toLowerCase() === normalizedEmail);
+  const normalizedName = name.trim().toLocaleLowerCase();
+  const account = db.accounts.find((a) => a.name.trim().toLocaleLowerCase() === normalizedName);
 
   if (!account || !verifyPassword(password, account.passwordHash, account.salt)) {
-    return res.status(401).json({ error: 'メールアドレスまたはパスワードが正しくありません。' });
+    return res.status(401).json({ error: 'ユーザー名またはパスワードが正しくありません。' });
   }
 
   let user = db.users.find((u) => u.id === account.id);
@@ -87,11 +87,11 @@ authRouter.post('/login', (req, res) => {
     saveDatabase();
   }
 
-  console.log(`[AUTH] User logged in: ${account.name} (${normalizedEmail})`);
+  console.log(`[AUTH] User logged in: ${account.name}`);
 
   res.json({
     user,
-    account: { id: account.id, name: account.name, email: account.email },
+    account: { id: account.id, name: account.name },
   });
 });
 

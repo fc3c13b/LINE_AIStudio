@@ -17,6 +17,7 @@ import {
   Play,
   Maximize2,
 } from 'lucide-react';
+import { apiUrl } from '../services/api';
 
 export type AlbumMediaType = 'photo' | 'video';
 
@@ -232,7 +233,7 @@ export const AlbumTab: React.FC<AlbumTabProps> = () => {
           let finalUrl = rawDataUrl;
 
           try {
-            const res = await fetch('/api/upload', {
+            const res = await fetch(apiUrl('/api/upload'), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ fileName: file.name, dataUrl: rawDataUrl }),
@@ -920,4 +921,3 @@ export const AlbumTab: React.FC<AlbumTabProps> = () => {
     </div>
   );
 };
-
