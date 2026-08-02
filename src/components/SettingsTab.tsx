@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { User } from '../types';
 import {
   UserCheck,
@@ -17,17 +17,21 @@ import {
 import { apiUrl } from '../services/api';
 
 export interface ChatSettings {
-  fontSize: number;       // px: 10-18
-  bubbleBorder: number;   // px: 0-4
-  maxPhotoHeight: number; // px: 80-300
-  timestampSize: number;  // px: 8-14
+  fontSize: number;        // px: 8-18
+  bubbleBorderRadius: number; // px: 0-20 吸い出し角丸さ
+  bubbleBorderWidth: number;  // px: 0-4  吸い出し縁取り幅
+  maxPhotoHeight: number;  // px: 60-300
+  timestampSize: number;   // px: 5-14
+  chatInterval: number;    // px: 2-16  吸い出し間隔
 }
 
 export const DEFAULT_CHAT_SETTINGS: ChatSettings = {
   fontSize: 12,
-  bubbleBorder: 0,
+  bubbleBorderRadius: 12,
+  bubbleBorderWidth: 0,
   maxPhotoHeight: 160,
   timestampSize: 9,
+  chatInterval: 6,
 };
 
 interface SettingsTabProps {
@@ -65,6 +69,40 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
   const [statusMessage, setStatusMessage] = useState(currentUser.statusMessage || '');
   const [avatar, setAvatar] = useState(currentUser.avatar);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+
+  // 写真を選択→Canvas で 1:1 クロップ→base64 で avatar に設定
+  const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const src = evt.target?.result as string;
+      const img = new Image();
+      img.onload = () => {
+        const size = Math.min(img.width, img.height);
+        const canvas = document.createElement('canvas');
+        canvas.width = 200;
+        canvas.height = 200;
+        const ctx = canvas.getContext('2d')!;
+        ctx.drawImage(
+          img,
+          (img.width - size) / 2,
+          (img.height - size) / 2,
+          size,
+          size,
+          0,
+          0,
+          200,
+          200
+        );
+        setAvatar(canvas.toDataURL('image/jpeg', 0.85));
+      };
+      img.src = src;
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
 
   // 管理者パネル用
   const [adminUsers, setAdminUsers] = useState<(User & { isAdmin?: boolean })[]>([]);
@@ -184,20 +222,24 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
                 type="text"
                 value={statusMessage}
                 onChange={(e) => setStatusMessage(e.target.value)}
-                placeholder="一言メッセージを入力"
+                placeholder="HELLO WORLD"
                 className="w-full bg-slate-100 px-3 py-2 rounded-xl text-xs sm:text-sm text-slate-900 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-600 mb-1">アイコン画像 URL</label>
-              <input
-                type="text"
-                value={avatar}
-                onChange={(e) => setAvatar(e.target.value)}
-                className="w-full bg-slate-100 px-3 py-2 rounded-xl text-xs sm:text-sm text-slate-900 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono text-xs"
-                required
-              />
+              <label className="block text-xs font-bold text-slate-600 mb-1">アイコン画像</label>
+              <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarFileChange} />
+              <div className="flex items-center gap-3">
+                <img src={avatar} alt="avatar" className="w-14 h-14 rounded-full object-cover border-2 border-slate-200 shrink-0" />
+                <button
+                  type="button"
+                  onClick={() => avatarInputRef.current?.click()}
+                  className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 transition"
+                >
+                  写真から選ぶ（1:1 自動トリミング）
+                </button>
+              </div>
             </div>
 
             <div className="flex items-center justify-between pt-1">
@@ -318,11 +360,13 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
             <MessageSquare className="w-4 h-4 text-emerald-500" />
             <span>チャット表示設定</span>
           </h2>
-          {([
-            { key: 'fontSize' as const, label: '文字サイズ', unit: 'px', min: 10, max: 18, step: 1 },
-            { key: 'bubbleBorder' as const, label: '吹き出し線幅', unit: 'px', min: 0, max: 4, step: 1 },
+        {([  
+            { key: 'fontSize' as const, label: '文字サイズ', unit: 'px', min: 8, max: 18, step: 1 },
+            { key: 'bubbleBorderRadius' as const, label: '吸い出し角丸さ', unit: 'px', min: 0, max: 20, step: 2 },
+            { key: 'bubbleBorderWidth' as const, label: '吸い出し縁取り幅', unit: 'px', min: 0, max: 4, step: 1 },
             { key: 'maxPhotoHeight' as const, label: '写真最大縦サイズ', unit: 'px', min: 60, max: 300, step: 10 },
-            { key: 'timestampSize' as const, label: '日時サイズ', unit: 'px', min: 7, max: 14, step: 1 },
+            { key: 'timestampSize' as const, label: '日時サイズ', unit: 'px', min: 5, max: 14, step: 1 },
+            { key: 'chatInterval' as const, label: 'チャット間隔', unit: 'px', min: 2, max: 16, step: 2 },
           ]).map(({ key, label, unit, min, max, step }) => (
             <div key={key} className="flex items-center gap-3">
               <span className="text-xs text-slate-600 w-28 shrink-0">{label}</span>

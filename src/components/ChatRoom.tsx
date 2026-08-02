@@ -526,7 +526,8 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
       <div
         ref={scrollContainerRef}
         onScroll={handleMessagesScroll}
-        className="flex-1 overflow-y-auto min-h-0 p-2 space-y-1.5"
+        className="flex-1 overflow-y-auto min-h-0 p-2 flex flex-col"
+        style={{ gap: chatSettings.chatInterval ?? 6 }}
       >
         {/* 過去メッセージ読み込みインジケーター */}
         {isLoadingOlder && (
@@ -630,11 +631,15 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
                   {/* Message Content Bubble */}
                   <div
                     onClick={() => setSelectedMsgForMenu(selectedMsgForMenu?.id === msg.id ? null : msg)}
-                    style={{ fontSize: chatSettings.fontSize, borderWidth: chatSettings.bubbleBorder }}
-                    className={`p-2 rounded-xl shadow-xs relative break-words leading-relaxed transition cursor-pointer select-none border ${
+                    style={{
+                      fontSize: chatSettings.fontSize,
+                      borderWidth: chatSettings.bubbleBorderWidth ?? 0,
+                      borderRadius: chatSettings.bubbleBorderRadius ?? 12,
+                    }}
+                    className={`p-2 shadow-xs relative break-words leading-relaxed transition cursor-pointer select-none border ${
                       isMe
-                        ? 'bg-[#85e249] text-slate-950 rounded-tr-none font-normal border-emerald-300/50'
-                        : 'bg-white text-slate-900 rounded-tl-none border-slate-200/90'
+                        ? 'bg-[#85e249] text-slate-950 font-normal border-emerald-300/50'
+                        : 'bg-white text-slate-900 border-slate-200/90'
                     }`}
                   >
                     {/* 引用リプライ元 */}

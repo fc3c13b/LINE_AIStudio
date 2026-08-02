@@ -17,6 +17,7 @@ import { Home, MessageSquare, Images, Music, Settings as SettingsIcon } from 'lu
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>('chats');
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
+  const [previousRoomId, setPreviousRoomId] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
 
   const [users, setUsers] = useState<User[]>([]);
@@ -663,6 +664,7 @@ export default function App() {
           onLoadOlderMessages={handleLoadOlderMessages}
           chatSettings={chatSettings}
           onOpenAlbums={() => {
+            setPreviousRoomId(activeRoomId);
             setActiveRoomId(null);
             setActiveTab('album');
           }}
@@ -706,7 +708,16 @@ export default function App() {
               userId={account ? me.id : null}
               isLoggedIn={!!account}
               onOpenAuthModal={() => setAuthModalState({ isOpen: true, mode: 'login' })}
-              onGoHome={() => setActiveTab('home')}
+              onGoHome={() => {
+                // チャットから開いた場合はチャットに戻る
+                if (previousRoomId) {
+                  setActiveRoomId(previousRoomId);
+                  setPreviousRoomId(null);
+                  setActiveTab('chats');
+                } else {
+                  setActiveTab('home');
+                }
+              }}
               rooms={rooms}
               onSendToChat={handleSendSystemToRoom}
             />

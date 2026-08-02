@@ -69,7 +69,7 @@ authRouter.post('/register', (req, res) => {
     id: userId,
     name: name.trim(),
     avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(name.trim())}`,
-    statusMessage: isAdminAccount ? 'System Administrator' : '新規登録ユーザーです！よろしくお願いします✨',
+    statusMessage: isAdminAccount ? 'System Administrator' : 'HELLO WORLD',
     isOnline: true,
     isOfficial: isAdminAccount === 1,
     friendIds: [],
