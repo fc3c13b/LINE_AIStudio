@@ -192,8 +192,12 @@ chatRouter.post('/friend-requests/:id/cancel', (req, res) => {
   res.json({ success: true, request });
 });
 
-// トークルーム一覧取得
+// トークルーム一覧取得（userId 指定時は自分がメンバーのルームのみ）
 chatRouter.get('/rooms', (req, res) => {
+  const userId = req.query.userId as string | undefined;
+  if (userId) {
+    return res.json(roomsRepo.forUser(userId));
+  }
   res.json(roomsRepo.all());
 });
 

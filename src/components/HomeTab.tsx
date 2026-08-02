@@ -61,11 +61,14 @@ export const HomeTab: React.FC<HomeTabProps> = ({
     (u) => u.id !== currentUser.id && !u.isOfficial && !userFriendIds.includes(u.id)
   );
 
-  const searchedNonFriends = nonFriends.filter(
-    (u) =>
-      u.name.toLowerCase().includes(friendSearchQuery.toLowerCase()) ||
-      u.id.toLowerCase().includes(friendSearchQuery.toLowerCase())
-  );
+  // 2文字以上入力しないと候補を表示しない（全ユーザー一覧の露出防止）
+  const searchedNonFriends = friendSearchQuery.trim().length >= 2
+    ? nonFriends.filter(
+        (u) =>
+          u.name.toLowerCase().includes(friendSearchQuery.toLowerCase()) ||
+          u.id.toLowerCase().includes(friendSearchQuery.toLowerCase())
+      )
+    : [];
 
   return (
     <div className="flex-1 flex flex-col bg-slate-50 overflow-y-auto">

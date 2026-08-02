@@ -253,6 +253,13 @@ export const roomsRepo = {
   all(): ChatRoom[] {
     return sqlite.prepare('SELECT * FROM rooms ORDER BY updatedAt DESC').all().map(rowToRoom);
   },
+  // 指定ユーザーがメンバーのルームのみ返す
+  forUser(userId: string): ChatRoom[] {
+    return sqlite
+      .prepare(`SELECT * FROM rooms WHERE members LIKE ? ORDER BY updatedAt DESC`)
+      .all(`%"${userId}"%`)
+      .map(rowToRoom);
+  },
   get(id: string): ChatRoom | undefined {
     const r = sqlite.prepare('SELECT * FROM rooms WHERE id = ?').get(id);
     return r ? rowToRoom(r) : undefined;

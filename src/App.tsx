@@ -102,7 +102,7 @@ export default function App() {
     try {
       const [usersRes, roomsRes] = await Promise.all([
         fetch(apiUrl('/api/users')).then((response) => readApiResponse<User[]>(response)),
-        fetch(apiUrl('/api/rooms')).then((response) => readApiResponse<ChatRoom[]>(response)),
+        fetch(apiUrl(`/api/rooms?userId=${encodeURIComponent(activeUserId)}`)).then((response) => readApiResponse<ChatRoom[]>(response)),
       ]);
 
       setUsers(usersRes);
