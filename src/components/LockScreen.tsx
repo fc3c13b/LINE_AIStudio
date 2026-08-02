@@ -124,7 +124,7 @@ export const LockScreen: React.FC<LockScreenProps> = ({
       return;
     }
     if (!newPassword || newPassword.length < 6) {
-      setError('新しいパスワードは6文字以上で入力してください');
+      setError('新しいパスワードは8文字以上・数字または記号を含めてください');
       return;
     }
 
@@ -354,7 +354,7 @@ export const LockScreen: React.FC<LockScreenProps> = ({
 
               <div>
                 <label className="block text-[11px] font-medium text-slate-400 mb-1 text-left">
-                  新しいパスワード（6文字以上）
+                  新しいパスワード（8文字以上・数字か記号を含む）
                 </label>
                 <div className="relative">
                   <input

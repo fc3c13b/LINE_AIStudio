@@ -4,8 +4,40 @@ import { User } from '../src/types';
 
 export const authRouter = express.Router();
 
+// S-04: IPごとのレートリミット（15分間に最大10回）
+const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT = 10;
+const RATE_WINDOW_MS = 15 * 60 * 1000;
+
+function enforceRateLimit(req: express.Request, res: express.Response): boolean {
+  const ip = req.ip || req.socket?.remoteAddress || 'unknown';
+  const key = `${ip}:${req.path}`;
+  const now = Date.now();
+  const entry = rateLimitStore.get(key);
+  if (!entry || now > entry.resetAt) {
+    rateLimitStore.set(key, { count: 1, resetAt: now + RATE_WINDOW_MS });
+    return true;
+  }
+  if (entry.count >= RATE_LIMIT) {
+    res.status(429).json({ error: 'しばらく時間をおいてから再試行してください（15分後に解除）。' });
+    return false;
+  }
+  entry.count += 1;
+  return true;
+}
+
+// S-07: パスワードポリシー検証（8文字以上 + 数字または記号を含む）
+function validatePassword(password: string): string | null {
+  if (password.length < 8) return 'パスワードは8文字以上で指定してください。';
+  if (!/[0-9!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password))
+    return 'パスワードには数字または記号（!@#$など）を1文字以上含めてください。';
+  return null;
+}
+
 // ユーザー新規登録
 authRouter.post('/register', (req, res) => {
+  if (!enforceRateLimit(req, res)) return;
+
   const { name, password } = req.body;
 
   if (!name || !password) {
@@ -16,9 +48,8 @@ authRouter.post('/register', (req, res) => {
     return res.status(400).json({ error: 'このユーザー名は既に登録されています。' });
   }
 
-  if (password.length < 6) {
-    return res.status(400).json({ error: 'パスワードは6文字以上で指定してください。' });
-  }
+  const pwError = validatePassword(password);
+  if (pwError) return res.status(400).json({ error: pwError });
 
   const userId = `user-${Date.now()}`;
   const { hash, salt } = hashPassword(password);
@@ -54,6 +85,8 @@ authRouter.post('/register', (req, res) => {
 
 // ログイン
 authRouter.post('/login', (req, res) => {
+  if (!enforceRateLimit(req, res)) return;
+
   const { name, password } = req.body;
 
   if (!name || !password) {
@@ -158,9 +191,8 @@ authRouter.post('/reset-password', (req, res) => {
     return res.status(400).json({ error: 'すべての項目を入力してください。' });
   }
 
-  if (newPassword.length < 6) {
-    return res.status(400).json({ error: '新しいパスワードは6文字以上で指定してください。' });
-  }
+  const pwError = validatePassword(newPassword);
+  if (pwError) return res.status(400).json({ error: pwError });
 
   const token = resetTokensRepo.findValid(email, code);
   if (!token) {

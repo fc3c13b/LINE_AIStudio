@@ -300,14 +300,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  パスワード (6文字以上)
+                  パスワード (8文字以上・数字か記号を含む)
                 </label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
                   <input
                     type="password"
                     required
-                    minLength={6}
+                    minLength={8}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
@@ -408,14 +408,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  新しいパスワード (6文字以上)
+                  新しいパスワード (8文字以上・数字か記号を含む)
                 </label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
                   <input
                     type="password"
                     required
-                    minLength={6}
+                    minLength={8}
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="新しいパスワード"
