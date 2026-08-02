@@ -12,6 +12,7 @@ services:
     volumes:
       # 会話データや将来の写真・動画などの保存用ディレクトリ
       - ./data:/app/data
+      - ./uploads:/app/uploads
 
   # コンテナの自動更新ツール（Watchtower）
   # GitHub Packages に新しいイメージがプッシュされたら自動でNAS上のコンテナをリロードします

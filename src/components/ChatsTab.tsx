@@ -141,7 +141,9 @@ export const ChatsTab: React.FC<ChatsTabProps> = ({
                   <div className="flex items-center justify-between mt-1">
                     <p className="text-xs text-slate-500 truncate pr-2">
                       {room.lastMessage
-                        ? room.lastMessage.type === 'sticker'
+                        ? room.lastMessage.deleted
+                          ? '取り消されたメッセージ'
+                          : room.lastMessage.type === 'sticker'
                           ? '🎨 スタンプを送信しました'
                           : room.lastMessage.type === 'image'
                           ? '📷 画像を送信しました'

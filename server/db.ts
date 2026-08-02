@@ -1,7 +1,7 @@
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
-import { User, ChatRoom, Message } from '../src/types';
+import { User, ChatRoom, Message, FriendRequest } from '../src/types';
 
 const DB_FILE = path.join(process.cwd(), 'data', 'db.json');
 
@@ -32,6 +32,7 @@ export interface DBData {
   messages: Message[];
   accounts: Account[];
   resetTokens: ResetToken[];
+  friendRequests: FriendRequest[];
 }
 
 export const DEFAULT_USERS: User[] = [];
@@ -44,6 +45,7 @@ export let db: DBData = {
   messages: [],
   accounts: [],
   resetTokens: [],
+  friendRequests: [],
 };
 
 // Password hashing helper
@@ -86,6 +88,7 @@ function sanitizeData(data: DBData): DBData {
     messages,
     accounts: data.accounts || [],
     resetTokens: data.resetTokens || [],
+    friendRequests: data.friendRequests || [],
   };
 }
 

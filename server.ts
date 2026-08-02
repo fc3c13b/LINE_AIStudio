@@ -56,6 +56,20 @@ const server = http.createServer(app);
 // WebSocket Server
 const wss = new WebSocketServer({ server });
 const clients = new Set<WebSocket>();
+// ws と userId の対応（同一ユーザーの複数接続も許容）
+const wsUserMap = new Map<WebSocket, string>();
+
+function onlineUserIds(): string[] {
+  return Array.from(new Set(Array.from(wsUserMap.values())));
+}
+
+// あるユーザーがまだ他の接続を持っているか
+function isUserStillOnline(userId: string): boolean {
+  for (const id of wsUserMap.values()) {
+    if (id === userId) return true;
+  }
+  return false;
+}
 
 wss.on('connection', (ws) => {
   clients.add(ws);
@@ -64,7 +78,7 @@ wss.on('connection', (ws) => {
   // Send initial data sync
   const initData: WSMessagePayload = {
     type: 'init',
-    onlineUsers: db.users.filter((u) => u.isOnline).map((u) => u.id),
+    onlineUsers: onlineUserIds(),
   };
   ws.send(JSON.stringify(initData));
 
@@ -72,7 +86,27 @@ wss.on('connection', (ws) => {
     try {
       const payload: WSMessagePayload = JSON.parse(data.toString());
 
-      if (payload.type === 'send_message' && payload.message) {
+      if (payload.type === 'identify' && payload.userId) {
+        // 接続とユーザーを関連付け、オンライン状態を更新・通知
+        wsUserMap.set(ws, payload.userId);
+        const user = db.users.find((u) => u.id === payload.userId);
+        if (user) {
+          user.isOnline = true;
+          saveDatabase();
+        }
+        broadcast({
+          type: 'presence',
+          userId: payload.userId,
+          isOnline: true,
+        });
+        // 最新のオンライン一覧を本人へ返す
+        ws.send(JSON.stringify({ type: 'init', onlineUsers: onlineUserIds() }));
+      } else if (payload.type === 'sync' && payload.since) {
+        // 再接続時の欠損メッセージ補完: since 以降のメッセージを返す
+        const sinceTime = new Date(payload.since).getTime();
+        const missed = db.messages.filter((m) => new Date(m.timestamp).getTime() > sinceTime);
+        ws.send(JSON.stringify({ type: 'sync_result', messages: missed }));
+      } else if (payload.type === 'send_message' && payload.message) {
         const msg = payload.message;
         db.messages.push(msg);
 
@@ -94,6 +128,46 @@ wss.on('connection', (ws) => {
         // Check if message was sent to LINE AI Assistant
         if (room && (room.id === 'room-ai' || room.members.some((m) => m.id === 'user-ai'))) {
           handleAiReply(msg, room);
+        }
+      } else if (payload.type === 'delete_message' && payload.messageId) {
+        // 送信取消: 内容を消しフラグを立てる
+        const target = db.messages.find((m) => m.id === payload.messageId);
+        if (target) {
+          target.deleted = true;
+          target.content = '';
+          target.reactions = {};
+          const room = db.rooms.find((r) => r.id === target.roomId);
+          if (room && room.lastMessage?.id === target.id) {
+            room.lastMessage = target;
+          }
+          saveDatabase();
+          broadcast({
+            type: 'delete_message',
+            roomId: target.roomId,
+            messageId: target.id,
+          });
+        }
+      } else if (payload.type === 'reaction' && payload.messageId && payload.emoji && payload.userId) {
+        // 絵文字リアクションのトグル永続化
+        const target = db.messages.find((m) => m.id === payload.messageId);
+        if (target) {
+          if (!target.reactions) target.reactions = {};
+          const users = target.reactions[payload.emoji] || [];
+          if (users.includes(payload.userId)) {
+            target.reactions[payload.emoji] = users.filter((id) => id !== payload.userId);
+            if (target.reactions[payload.emoji].length === 0) {
+              delete target.reactions[payload.emoji];
+            }
+          } else {
+            target.reactions[payload.emoji] = [...users, payload.userId];
+          }
+          saveDatabase();
+          broadcast({
+            type: 'reaction',
+            roomId: target.roomId,
+            messageId: target.id,
+            reactions: target.reactions,
+          });
         }
       } else if (payload.type === 'typing') {
         broadcast(payload, ws);
@@ -122,6 +196,24 @@ wss.on('connection', (ws) => {
 
   ws.on('close', () => {
     clients.delete(ws);
+    const userId = wsUserMap.get(ws);
+    wsUserMap.delete(ws);
+    if (userId && !isUserStillOnline(userId)) {
+      // このユーザーの最後の接続が切れた: オフライン化
+      const user = db.users.find((u) => u.id === userId);
+      const lastSeen = new Date().toISOString();
+      if (user) {
+        user.isOnline = false;
+        user.lastSeen = lastSeen;
+        saveDatabase();
+      }
+      broadcast({
+        type: 'presence',
+        userId,
+        isOnline: false,
+        lastSeen,
+      });
+    }
     console.log(`WebSocket client disconnected. Total clients: ${clients.size}`);
   });
 });

@@ -44,6 +44,11 @@ interface ChatRoomProps {
   onStartCall: (type: 'voice' | 'video') => void;
   isPartnerTyping?: boolean;
   onSendTypingStatus: (isTyping: boolean) => void;
+  onDeleteMessage?: (messageId: string) => void;
+  onToggleReaction?: (messageId: string, emoji: string) => void;
+  replyingTo?: Message | null;
+  onSetReplyingTo?: (msg: Message | null) => void;
+  onLoadOlderMessages?: (roomId: string) => Promise<boolean>;
   onOpenAlbums?: () => void;
 }
 
@@ -56,6 +61,11 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
   onStartCall,
   isPartnerTyping = false,
   onSendTypingStatus,
+  onDeleteMessage,
+  onToggleReaction,
+  replyingTo,
+  onSetReplyingTo,
+  onLoadOlderMessages,
   onOpenAlbums,
 }) => {
   const [inputText, setInputText] = useState('');
@@ -71,7 +81,13 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
 
   // Message Reaction & Context Menu State
   const [selectedMsgForMenu, setSelectedMsgForMenu] = useState<Message | null>(null);
-  const [reactions, setReactions] = useState<Record<string, string>>({}); // msgId -> emoji
+
+  // ページネーション（過去メッセージ読み込み）
+  const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+  const [hasMoreOlder, setHasMoreOlder] = useState(true);
+
+  // 未読へのジャンプ用: 開いた時点の最初の未読メッセージ
+  const [showJumpButton, setShowJumpButton] = useState(false);
 
   // Fullscreen Media Lightbox State
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
@@ -82,6 +98,9 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const prevScrollHeightRef = useRef<number>(0);
+  const isNearBottomRef = useRef<boolean>(true);
 
   const isAiRoom = room.id === 'room-ai' || room.members.some((m) => m.id === 'user-ai');
 
@@ -193,10 +212,58 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
     e.target.value = '';
   };
 
-  // Auto scroll to bottom on new messages
+  // Auto scroll to bottom on new messages（下端付近にいる場合のみ）
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (isNearBottomRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      setShowJumpButton(false);
+    } else {
+      // 下端にいない状態で新着 → ジャンプボタンを表示
+      setShowJumpButton(true);
+    }
   }, [messages, isPartnerTyping]);
+
+  // ルーム切り替え時はページネーション状態をリセットし最下部へ
+  useEffect(() => {
+    setHasMoreOlder(true);
+    isNearBottomRef.current = true;
+    setShowJumpButton(false);
+    requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView();
+    });
+  }, [room.id]);
+
+  // スクロール監視: 上端で過去読み込み、下端判定でジャンプボタン制御
+  const handleMessagesScroll = async () => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    isNearBottomRef.current = distanceFromBottom < 120;
+    if (isNearBottomRef.current) setShowJumpButton(false);
+
+    // 上端付近に到達したら過去メッセージを読み込む
+    if (el.scrollTop < 40 && hasMoreOlder && !isLoadingOlder && onLoadOlderMessages) {
+      setIsLoadingOlder(true);
+      prevScrollHeightRef.current = el.scrollHeight;
+      const more = await onLoadOlderMessages(room.id);
+      setHasMoreOlder(more);
+      // 読み込み後にスクロール位置を維持
+      requestAnimationFrame(() => {
+        const container = scrollContainerRef.current;
+        if (container) {
+          container.scrollTop = container.scrollHeight - prevScrollHeightRef.current;
+        }
+        setIsLoadingOlder(false);
+      });
+    }
+  };
+
+  const scrollToBottom = () => {
+    isNearBottomRef.current = true;
+    setShowJumpButton(false);
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
 
   // Voice recording timer
   useEffect(() => {
@@ -245,7 +312,19 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
   };
 
   const handleAddReaction = (msgId: string, emoji: string) => {
-    setReactions((prev) => ({ ...prev, [msgId]: prev[msgId] === emoji ? '' : emoji }));
+    if (onToggleReaction) onToggleReaction(msgId, emoji);
+    setSelectedMsgForMenu(null);
+  };
+
+  // 送信取消（削除）
+  const handleDeleteOwnMessage = (msg: Message) => {
+    if (onDeleteMessage) onDeleteMessage(msg.id);
+    setSelectedMsgForMenu(null);
+  };
+
+  // 引用リプライを開始
+  const handleStartReply = (msg: Message) => {
+    if (onSetReplyingTo) onSetReplyingTo(msg);
     setSelectedMsgForMenu(null);
   };
 
@@ -399,7 +478,18 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
       )}
 
       {/* Messages Feed */}
-      <div className="flex-1 overflow-y-auto min-h-0 p-3.5 space-y-3.5">
+      <div
+        ref={scrollContainerRef}
+        onScroll={handleMessagesScroll}
+        className="flex-1 overflow-y-auto min-h-0 p-3.5 space-y-3.5"
+      >
+        {/* 過去メッセージ読み込みインジケーター */}
+        {isLoadingOlder && (
+          <div className="flex justify-center py-2">
+            <Loader2 className="w-4 h-4 animate-spin text-white/80" />
+          </div>
+        )}
+
         <div className="flex justify-center my-1">
           <span className="px-3.5 py-1 bg-black/15 text-white text-[10px] font-medium rounded-full backdrop-blur-xs">
             {new Date().toLocaleDateString('ja-JP', {
@@ -414,7 +504,29 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
         {messages.map((msg) => {
           const isMe = msg.senderId === currentUser.id;
           const isRead = msg.readBy && msg.readBy.length > 1;
-          const msgReaction = reactions[msg.id];
+          const msgReactions = msg.reactions || {};
+          const reactionEntries = Object.entries(msgReactions).filter(([, ids]) => ids.length > 0);
+
+          // 送信取消済みメッセージ
+          if (msg.deleted) {
+            return (
+              <div key={msg.id} className={`flex items-start gap-2 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                {!isMe && (
+                  <img
+                    src={msg.senderAvatar}
+                    alt={msg.senderName}
+                    className="w-8 h-8 rounded-full object-cover bg-gray-300 shrink-0 border border-white/20 shadow-xs mt-1"
+                  />
+                )}
+                <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[80%]`}>
+                  <div className="p-3 rounded-2xl text-xs italic text-slate-500 bg-slate-100/90 border border-slate-200 flex items-center gap-1.5">
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>メッセージの送信を取り消しました</span>
+                  </div>
+                </div>
+              </div>
+            );
+          }
 
           return (
             <div key={msg.id} className={`flex items-start gap-2 ${isMe ? 'justify-end' : 'justify-start'}`}>
@@ -443,6 +555,16 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
                         : 'bg-white text-slate-900 rounded-tl-none border border-slate-200/90'
                     }`}
                   >
+                    {/* 引用リプライ元 */}
+                    {msg.replyTo && (
+                      <div className={`mb-1.5 pl-2 border-l-2 rounded-r text-[11px] ${
+                        isMe ? 'border-emerald-700/40 bg-black/5' : 'border-emerald-400 bg-slate-50'
+                      } py-1 pr-2`}>
+                        <div className="font-bold text-emerald-700/90 leading-tight">{msg.replyTo.senderName}</div>
+                        <div className="text-slate-500 line-clamp-1">{msg.replyTo.preview}</div>
+                      </div>
+                    )}
+
                     {msg.type === 'text' && <p className="whitespace-pre-wrap">{msg.content}</p>}
 
                     {msg.type === 'sticker' && (
@@ -519,10 +641,25 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
                       </div>
                     )}
 
-                    {/* Reaction Badge on Message */}
-                    {msgReaction && (
-                      <div className="absolute -bottom-2 -right-2 bg-white border border-slate-200 px-1.5 py-0.5 rounded-full text-xs shadow-md animate-in zoom-in-50">
-                        {msgReaction}
+                    {/* Reaction Badges on Message */}
+                    {reactionEntries.length > 0 && (
+                      <div className="absolute -bottom-3 -right-1 flex items-center gap-0.5">
+                        {reactionEntries.map(([emoji, ids]) => (
+                          <button
+                            key={emoji}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAddReaction(msg.id, emoji);
+                            }}
+                            className={`bg-white border px-1.5 py-0.5 rounded-full text-xs shadow-md flex items-center gap-0.5 transition ${
+                              ids.includes(currentUser.id) ? 'border-emerald-400' : 'border-slate-200'
+                            }`}
+                            title={`${ids.length}件のリアクション`}
+                          >
+                            <span>{emoji}</span>
+                            {ids.length > 1 && <span className="text-[9px] text-slate-500 font-bold">{ids.length}</span>}
+                          </button>
+                        ))}
                       </div>
                     )}
                   </div>
@@ -581,36 +718,33 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
             {/* Actions List */}
             <div className="divide-y divide-slate-100 text-xs font-bold text-slate-700">
               <button
-                onClick={() => {
-                  setInputText(`> ${selectedMsgForMenu.content}\n`);
-                  setSelectedMsgForMenu(null);
-                }}
+                onClick={() => handleStartReply(selectedMsgForMenu)}
                 className="w-full py-2.5 text-left flex items-center gap-2 px-2 hover:bg-slate-50 rounded-lg cursor-pointer"
               >
                 <RotateCcw className="w-4 h-4 text-blue-500" />
                 <span>リプライ (返信)</span>
               </button>
-              <button
-                onClick={() => {
-                  navigator.clipboard?.writeText(selectedMsgForMenu.content);
-                  alert('メッセージをコピーしました');
-                  setSelectedMsgForMenu(null);
-                }}
-                className="w-full py-2.5 text-left flex items-center gap-2 px-2 hover:bg-slate-50 rounded-lg cursor-pointer"
-              >
-                <Copy className="w-4 h-4 text-emerald-600" />
-                <span>コピー</span>
-              </button>
-              <button
-                onClick={() => {
-                  alert('送信を取り消しました');
-                  setSelectedMsgForMenu(null);
-                }}
-                className="w-full py-2.5 text-left flex items-center gap-2 px-2 hover:bg-slate-50 rounded-lg text-red-600 cursor-pointer"
-              >
-                <Trash2 className="w-4 h-4" />
-                <span>送信取消</span>
-              </button>
+              {selectedMsgForMenu.type === 'text' && (
+                <button
+                  onClick={() => {
+                    navigator.clipboard?.writeText(selectedMsgForMenu.content);
+                    setSelectedMsgForMenu(null);
+                  }}
+                  className="w-full py-2.5 text-left flex items-center gap-2 px-2 hover:bg-slate-50 rounded-lg cursor-pointer"
+                >
+                  <Copy className="w-4 h-4 text-emerald-600" />
+                  <span>コピー</span>
+                </button>
+              )}
+              {selectedMsgForMenu.senderId === currentUser.id && (
+                <button
+                  onClick={() => handleDeleteOwnMessage(selectedMsgForMenu)}
+                  className="w-full py-2.5 text-left flex items-center gap-2 px-2 hover:bg-slate-50 rounded-lg text-red-600 cursor-pointer"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>送信取消</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -733,6 +867,49 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
             <span>ファイルをサーバーへ保存中...</span>
           </div>
           <span className="text-[10px] text-emerald-600 font-normal">少しお待ちください</span>
+        </div>
+      )}
+
+      {/* 未読/新着へジャンプするボタン */}
+      {showJumpButton && (
+        <button
+          onClick={scrollToBottom}
+          className="absolute bottom-20 right-4 z-30 px-3 py-2 bg-white text-emerald-600 font-bold text-xs rounded-full shadow-lg border border-slate-200 flex items-center gap-1 hover:bg-emerald-50 transition animate-in fade-in slide-in-from-bottom-2"
+        >
+          <ChevronLeft className="w-4 h-4 -rotate-90" />
+          <span>新着メッセージ</span>
+        </button>
+      )}
+
+      {/* 引用リプライ プレビューバー */}
+      {replyingTo && (
+        <div className="bg-slate-50 border-t border-slate-200 px-3 py-2 flex items-center justify-between gap-2 z-20 shrink-0 animate-in slide-in-from-bottom-1">
+          <div className="min-w-0 flex items-center gap-2">
+            <div className="w-1 h-8 bg-emerald-400 rounded-full shrink-0" />
+            <div className="min-w-0">
+              <div className="text-[11px] font-bold text-emerald-700 leading-tight">
+                {replyingTo.senderName} に返信
+              </div>
+              <div className="text-[11px] text-slate-500 truncate">
+                {replyingTo.type === 'text'
+                  ? replyingTo.content
+                  : replyingTo.type === 'image'
+                  ? '画像'
+                  : replyingTo.type === 'video'
+                  ? '動画'
+                  : replyingTo.type === 'sticker'
+                  ? 'スタンプ'
+                  : 'ボイスメッセージ'}
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => onSetReplyingTo && onSetReplyingTo(null)}
+            className="p-1.5 rounded-full hover:bg-slate-200 text-slate-500 transition shrink-0"
+            title="返信をキャンセル"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
 

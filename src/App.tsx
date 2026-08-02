@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { User, ChatRoom, Message, TabType, CallState, WSMessagePayload } from './types';
+import React, { useState, useEffect, useRef } from 'react';
+import { User, ChatRoom, Message, TabType, CallState, WSMessagePayload, FriendRequest } from './types';
 import { wsService } from './services/websocket';
 import { apiUrl, readApiResponse } from './services/api';
 import { SmartphoneFrame } from './components/SmartphoneFrame';
@@ -23,6 +23,15 @@ export default function App() {
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
   const [roomMessages, setRoomMessages] = useState<Record<string, Message[]>>({});
   const [partnerTyping, setPartnerTyping] = useState<Record<string, boolean>>({});
+  const [friendRequests, setFriendRequests] = useState<{ incoming: FriendRequest[]; outgoing: FriendRequest[] }>({
+    incoming: [],
+    outgoing: [],
+  });
+  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+
+  // タイピング送信のデバウンス用
+  const typingDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastTypingSentRef = useRef<boolean>(false);
 
   const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
   const [callState, setCallState] = useState<CallState | null>(null);
@@ -76,6 +85,7 @@ export default function App() {
     }
     setActiveUserId(user.id);
     setIsAppLocked(false);
+    wsService.identify(user.id);
     fetchData();
   };
 
@@ -84,6 +94,7 @@ export default function App() {
     localStorage.removeItem('line_app_account');
     setActiveUserId('user-me');
     setIsAppLocked(false);
+    setFriendRequests({ incoming: [], outgoing: [] });
   };
 
   // 1. Initial REST fetch
@@ -97,16 +108,32 @@ export default function App() {
       setUsers(usersRes);
       setRooms(roomsRes);
 
-      // Fetch messages for initial rooms
+      // Fetch messages for initial rooms（最新ページのみ）
       for (const room of roomsRes) {
         fetch(apiUrl(`/api/rooms/${room.id}/messages`))
-          .then((response) => readApiResponse<Message[]>(response))
-          .then((msgs) => {
-            setRoomMessages((prev) => ({ ...prev, [room.id]: msgs }));
+          .then((response) => readApiResponse<{ messages: Message[]; hasMore: boolean }>(response))
+          .then((data) => {
+            setRoomMessages((prev) => ({ ...prev, [room.id]: data.messages }));
           });
+      }
+
+      // 友達申請一覧を取得
+      if (account?.id) {
+        fetchFriendRequests(account.id);
       }
     } catch (err) {
       console.error('Error fetching initial REST data:', err);
+    }
+  };
+
+  // 友達申請一覧の取得
+  const fetchFriendRequests = async (userId: string) => {
+    try {
+      const res = await fetch(apiUrl(`/api/friend-requests?userId=${encodeURIComponent(userId)}`));
+      const data = await readApiResponse<{ incoming: FriendRequest[]; outgoing: FriendRequest[] }>(res);
+      setFriendRequests(data);
+    } catch (err) {
+      console.error('Error fetching friend requests:', err);
     }
   };
 
@@ -115,6 +142,10 @@ export default function App() {
 
     // Connect WebSocket
     wsService.connect();
+    // 認証済みユーザーを関連付け（presence 用）
+    if (account?.id) {
+      wsService.identify(account.id);
+    }
 
     // WebSocket Event Listener
     const unsubscribe = wsService.subscribe((payload: WSMessagePayload) => {
@@ -125,6 +156,36 @@ export default function App() {
           setUsers((prev) =>
             prev.map((u) => ({ ...u, isOnline: payload.onlineUsers?.includes(u.id) }))
           );
+        }
+      } else if (payload.type === 'presence' && payload.userId) {
+        // オンライン状態のリアルタイム更新
+        setUsers((prev) =>
+          prev.map((u) =>
+            u.id === payload.userId
+              ? { ...u, isOnline: !!payload.isOnline, lastSeen: payload.lastSeen || u.lastSeen }
+              : u
+          )
+        );
+      } else if (payload.type === 'user_update' && payload.user) {
+        // プロフィール変更・友達関係更新の反映
+        const updated = payload.user;
+        setUsers((prev) => {
+          if (prev.some((u) => u.id === updated.id)) {
+            return prev.map((u) => (u.id === updated.id ? { ...u, ...updated } : u));
+          }
+          return [...prev, updated];
+        });
+      } else if (payload.type === 'friend_request') {
+        // 友達申請の受信・状態変化。自分に関係するもののみ再取得
+        if (account?.id) {
+          const fr = payload.friendRequest;
+          if (!fr || fr.fromUserId === account.id || fr.toUserId === account.id) {
+            fetchFriendRequests(account.id);
+            // 承認された場合は友達リスト等を更新
+            if (fr && fr.status === 'accepted') {
+              fetchData();
+            }
+          }
         }
       } else if (payload.type === 'new_message' && payload.message) {
         const msg = payload.message;
@@ -149,6 +210,40 @@ export default function App() {
             return r;
           })
         );
+      } else if (payload.type === 'sync_result' && payload.messages) {
+        // 再接続中に届いたメッセージを補完
+        setRoomMessages((prev) => {
+          const next = { ...prev };
+          payload.messages!.forEach((msg) => {
+            const existing = next[msg.roomId] || [];
+            if (!existing.some((m) => m.id === msg.id)) {
+              next[msg.roomId] = [...existing, msg];
+            }
+          });
+          return next;
+        });
+      } else if (payload.type === 'delete_message' && payload.roomId && payload.messageId) {
+        // 送信取消の反映
+        setRoomMessages((prev) => {
+          const roomMsgs = prev[payload.roomId!] || [];
+          return {
+            ...prev,
+            [payload.roomId!]: roomMsgs.map((m) =>
+              m.id === payload.messageId ? { ...m, deleted: true, content: '', reactions: {} } : m
+            ),
+          };
+        });
+      } else if (payload.type === 'reaction' && payload.roomId && payload.messageId) {
+        // リアクション更新の反映
+        setRoomMessages((prev) => {
+          const roomMsgs = prev[payload.roomId!] || [];
+          return {
+            ...prev,
+            [payload.roomId!]: roomMsgs.map((m) =>
+              m.id === payload.messageId ? { ...m, reactions: payload.reactions || {} } : m
+            ),
+          };
+        });
       } else if (payload.type === 'typing' && payload.roomId) {
         setPartnerTyping((prev) => ({
           ...prev,
@@ -169,7 +264,7 @@ export default function App() {
         });
       } else if (payload.type === 'create_room' && payload.room) {
         const newRoom = payload.room;
-        setRooms((prev) => [newRoom, ...prev]);
+        setRooms((prev) => (prev.some((r) => r.id === newRoom.id) ? prev : [newRoom, ...prev]));
       }
     });
 
@@ -181,6 +276,7 @@ export default function App() {
   // Open Chat Room
   const handleOpenChat = (roomId: string) => {
     setActiveRoomId(roomId);
+    setReplyingTo(null);
 
     // Reset unread count
     setRooms((prev) =>
@@ -193,6 +289,31 @@ export default function App() {
       roomId,
       userId: me.id,
     });
+  };
+
+  // 過去メッセージの追加読み込み（ページネーション）
+  const handleLoadOlderMessages = async (roomId: string): Promise<boolean> => {
+    const current = roomMessages[roomId] || [];
+    const oldest = current[0];
+    if (!oldest) return false;
+    try {
+      const res = await fetch(
+        apiUrl(`/api/rooms/${roomId}/messages?before=${encodeURIComponent(oldest.timestamp)}&limit=30`)
+      );
+      const data = await readApiResponse<{ messages: Message[]; hasMore: boolean }>(res);
+      if (data.messages.length > 0) {
+        setRoomMessages((prev) => {
+          const existing = prev[roomId] || [];
+          const existingIds = new Set(existing.map((m) => m.id));
+          const merged = [...data.messages.filter((m) => !existingIds.has(m.id)), ...existing];
+          return { ...prev, [roomId]: merged };
+        });
+      }
+      return data.hasMore;
+    } catch (err) {
+      console.error('Error loading older messages:', err);
+      return false;
+    }
   };
 
   // Send Message
@@ -212,6 +333,16 @@ export default function App() {
       meta,
     };
 
+    // 引用リプライがあれば付与
+    if (replyingTo) {
+      newMsg.replyTo = {
+        messageId: replyingTo.id,
+        senderName: replyingTo.senderName,
+        type: replyingTo.type,
+        preview: replyPreviewOf(replyingTo),
+      };
+    }
+
     // Optimistic UI update
     setRoomMessages((prev) => ({
       ...prev,
@@ -229,17 +360,123 @@ export default function App() {
       type: 'send_message',
       message: newMsg,
     });
+
+    setReplyingTo(null);
   };
 
-  // Typing status emit
-  const handleSendTypingStatus = (isTyping: boolean) => {
+  // リプライ元プレビュー文字列を生成
+  const replyPreviewOf = (msg: Message): string => {
+    switch (msg.type) {
+      case 'image':
+        return '画像';
+      case 'video':
+        return '動画';
+      case 'sticker':
+        return 'スタンプ';
+      case 'voice':
+        return 'ボイスメッセージ';
+      default:
+        return msg.content.slice(0, 40);
+    }
+  };
+
+  // メッセージ送信取消（削除）
+  const handleDeleteMessage = (messageId: string) => {
     if (!activeRoomId) return;
     wsService.send({
-      type: 'typing',
+      type: 'delete_message',
       roomId: activeRoomId,
-      userId: me.id,
-      isTyping,
+      messageId,
     });
+  };
+
+  // 絵文字リアクションのトグル
+  const handleToggleReaction = (messageId: string, emoji: string) => {
+    if (!activeRoomId) return;
+    wsService.send({
+      type: 'reaction',
+      roomId: activeRoomId,
+      messageId,
+      emoji,
+      userId: me.id,
+    });
+  };
+
+  // Typing status emit（デバウンス付き）
+  const handleSendTypingStatus = (isTyping: boolean) => {
+    if (!activeRoomId) return;
+
+    if (isTyping) {
+      // 入力中: 立ち上がりのみ即送信し、停止は遅延で送る
+      if (!lastTypingSentRef.current) {
+        lastTypingSentRef.current = true;
+        wsService.send({ type: 'typing', roomId: activeRoomId, userId: me.id, isTyping: true });
+      }
+      if (typingDebounceRef.current) clearTimeout(typingDebounceRef.current);
+      typingDebounceRef.current = setTimeout(() => {
+        lastTypingSentRef.current = false;
+        wsService.send({ type: 'typing', roomId: activeRoomId, userId: me.id, isTyping: false });
+      }, 2000);
+    } else {
+      if (typingDebounceRef.current) clearTimeout(typingDebounceRef.current);
+      if (lastTypingSentRef.current) {
+        lastTypingSentRef.current = false;
+        wsService.send({ type: 'typing', roomId: activeRoomId, userId: me.id, isTyping: false });
+      }
+    }
+  };
+
+  // 友達申請の送信
+  const handleSendFriendRequest = async (toUserId: string) => {
+    try {
+      const res = await fetch(apiUrl('/api/friend-requests'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fromUserId: me.id, toUserId }),
+      });
+      if (res.ok) {
+        fetchFriendRequests(me.id);
+      }
+    } catch (err) {
+      console.error('Error sending friend request:', err);
+    }
+  };
+
+  // 友達申請の承認
+  const handleAcceptFriendRequest = async (requestId: string) => {
+    try {
+      const res = await fetch(apiUrl(`/api/friend-requests/${requestId}/accept`), { method: 'POST' });
+      if (res.ok) {
+        fetchFriendRequests(me.id);
+        fetchData();
+      }
+    } catch (err) {
+      console.error('Error accepting friend request:', err);
+    }
+  };
+
+  // 友達申請の拒否
+  const handleRejectFriendRequest = async (requestId: string) => {
+    try {
+      const res = await fetch(apiUrl(`/api/friend-requests/${requestId}/reject`), { method: 'POST' });
+      if (res.ok) {
+        fetchFriendRequests(me.id);
+      }
+    } catch (err) {
+      console.error('Error rejecting friend request:', err);
+    }
+  };
+
+  // 友達申請のキャンセル
+  const handleCancelFriendRequest = async (requestId: string) => {
+    try {
+      const res = await fetch(apiUrl(`/api/friend-requests/${requestId}/cancel`), { method: 'POST' });
+      if (res.ok) {
+        fetchFriendRequests(me.id);
+      }
+    } catch (err) {
+      console.error('Error canceling friend request:', err);
+    }
   };
 
   // Add Friend
@@ -303,7 +540,7 @@ export default function App() {
       const res = await fetch(apiUrl('/api/users/profile'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, statusMessage, avatar }),
+        body: JSON.stringify({ userId: me.id, name, statusMessage, avatar }),
       });
       const updatedUser: User = await res.json();
       setUsers((prev) => prev.map((u) => (u.id === me.id ? updatedUser : u)));
@@ -368,6 +605,11 @@ export default function App() {
           onStartCall={handleStartCall}
           isPartnerTyping={partnerTyping[activeRoomId] || false}
           onSendTypingStatus={handleSendTypingStatus}
+          onDeleteMessage={handleDeleteMessage}
+          onToggleReaction={handleToggleReaction}
+          replyingTo={replyingTo}
+          onSetReplyingTo={setReplyingTo}
+          onLoadOlderMessages={handleLoadOlderMessages}
           onOpenAlbums={() => {
             setActiveRoomId(null);
             setActiveTab('album');
@@ -388,8 +630,12 @@ export default function App() {
               onOpenAuthModal={(mode = 'login') =>
                 setAuthModalState({ isOpen: true, mode })
               }
-              onAddFriend={handleAddFriend}
+              onSendFriendRequest={handleSendFriendRequest}
               onRemoveFriend={handleRemoveFriend}
+              friendRequests={friendRequests}
+              onAcceptFriendRequest={handleAcceptFriendRequest}
+              onRejectFriendRequest={handleRejectFriendRequest}
+              onCancelFriendRequest={handleCancelFriendRequest}
             />
           )}
 

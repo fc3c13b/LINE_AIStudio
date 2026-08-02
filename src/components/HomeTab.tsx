@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { User, ChatRoom } from '../types';
-import { Search, UserPlus, Users, Sparkles, ChevronRight, MessageSquare, ShieldCheck, Settings, UserX } from 'lucide-react';
+import { User, ChatRoom, FriendRequest } from '../types';
+import { Search, UserPlus, Users, Sparkles, ChevronRight, MessageSquare, ShieldCheck, Settings, UserX, Check, X, Clock, Bell } from 'lucide-react';
 
 interface HomeTabProps {
   currentUser: User;
@@ -11,8 +11,12 @@ interface HomeTabProps {
   onOpenProfileSettings: () => void;
   isLoggedIn?: boolean;
   onOpenAuthModal?: (mode?: 'login' | 'register') => void;
-  onAddFriend?: (friendId: string) => void;
+  onSendFriendRequest?: (friendId: string) => void;
   onRemoveFriend?: (friendId: string) => void;
+  friendRequests?: { incoming: FriendRequest[]; outgoing: FriendRequest[] };
+  onAcceptFriendRequest?: (requestId: string) => void;
+  onRejectFriendRequest?: (requestId: string) => void;
+  onCancelFriendRequest?: (requestId: string) => void;
 }
 
 export const HomeTab: React.FC<HomeTabProps> = ({
@@ -24,8 +28,12 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   onOpenProfileSettings,
   isLoggedIn = false,
   onOpenAuthModal,
-  onAddFriend,
+  onSendFriendRequest,
   onRemoveFriend,
+  friendRequests = { incoming: [], outgoing: [] },
+  onAcceptFriendRequest,
+  onRejectFriendRequest,
+  onCancelFriendRequest,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddFriendModalOpen, setIsAddFriendModalOpen] = useState(false);
@@ -37,6 +45,10 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   const friends = users.filter((u) => u.id !== currentUser.id && !u.isOfficial && userFriendIds.includes(u.id));
   const officialAccounts = users.filter((u) => u.isOfficial);
   const groupRooms = rooms.filter((r) => r.isGroup);
+
+  // 申請中の相手ID集合（送信済み）
+  const outgoingPendingIds = new Set(friendRequests.outgoing.map((r) => r.toUserId));
+  const userById = (id: string) => users.find((u) => u.id === id);
 
   const filteredFriends = friends.filter(
     (u) =>
@@ -147,6 +159,101 @@ export const HomeTab: React.FC<HomeTabProps> = ({
           />
         </div>
 
+        {/* 友達申請（受信）*/}
+        {isLoggedIn && friendRequests.incoming.length > 0 && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 px-1">
+              <Bell className="w-3.5 h-3.5" />
+              <span>新しい友達申請</span>
+              <span className="min-w-[18px] h-[18px] px-1 bg-emerald-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                {friendRequests.incoming.length}
+              </span>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-emerald-200/80 divide-y divide-slate-100 overflow-hidden shadow-sm">
+              {friendRequests.incoming.map((req) => {
+                const sender = userById(req.fromUserId);
+                return (
+                  <div key={req.id} className="p-3 flex items-center justify-between">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <img
+                        src={sender?.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${req.fromUserId}`}
+                        alt={sender?.name || req.fromUserId}
+                        className="w-10 h-10 rounded-full object-cover border border-slate-200 shrink-0"
+                      />
+                      <div className="min-w-0">
+                        <div className="font-bold text-slate-900 text-xs truncate">
+                          {sender?.name || '不明なユーザー'}
+                        </div>
+                        <div className="text-[10px] text-slate-400 mt-0.5 truncate">
+                          あなたに友達申請しました
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        onClick={() => onAcceptFriendRequest && onAcceptFriendRequest(req.id)}
+                        className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs rounded-xl transition shadow-xs flex items-center gap-1"
+                        title="承認"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>承認</span>
+                      </button>
+                      <button
+                        onClick={() => onRejectFriendRequest && onRejectFriendRequest(req.id)}
+                        className="p-1.5 bg-slate-100 hover:bg-rose-100 text-slate-500 hover:text-rose-500 rounded-xl transition"
+                        title="拒否"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* 送信済みの友達申請 */}
+        {isLoggedIn && friendRequests.outgoing.length > 0 && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-slate-500 px-1">
+              <Clock className="w-3.5 h-3.5" />
+              <span>申請中</span>
+              <span className="text-slate-400 font-normal">{friendRequests.outgoing.length}</span>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-slate-200/80 divide-y divide-slate-100 overflow-hidden shadow-sm">
+              {friendRequests.outgoing.map((req) => {
+                const target = userById(req.toUserId);
+                return (
+                  <div key={req.id} className="p-3 flex items-center justify-between">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <img
+                        src={target?.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${req.toUserId}`}
+                        alt={target?.name || req.toUserId}
+                        className="w-10 h-10 rounded-full object-cover border border-slate-200 shrink-0"
+                      />
+                      <div className="min-w-0">
+                        <div className="font-bold text-slate-900 text-xs truncate">
+                          {target?.name || '不明なユーザー'}
+                        </div>
+                        <div className="text-[10px] text-amber-600 mt-0.5">承認待ち</div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => onCancelFriendRequest && onCancelFriendRequest(req.id)}
+                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs rounded-xl transition"
+                    >
+                      取消
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Action Quick Grid */}
         <div className="grid grid-cols-2 gap-2.5">
           <button
@@ -235,92 +342,106 @@ export const HomeTab: React.FC<HomeTabProps> = ({
         )}
 
         {/* Friends List */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-xs font-bold text-slate-500 px-1">
-            <span>友達</span>
-            <span className="text-slate-400 font-normal">{filteredFriends.length} 人</span>
-          </div>
+        {isLoggedIn ? (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs font-bold text-slate-500 px-1">
+              <span>友達</span>
+              <span className="text-slate-400 font-normal">{filteredFriends.length} 人</span>
+            </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200/80 divide-y divide-slate-100 overflow-hidden shadow-sm">
-            {filteredFriends.length === 0 ? (
-              <div className="p-6 text-center text-xs text-slate-500 space-y-3">
-                <p className="font-bold text-slate-700">登録されている友達はいません (0人)</p>
-                <p className="text-[11px] text-slate-400">「友達追加」から他のユーザーを検索して友達に追加できます。</p>
-                <button
-                  onClick={() => setIsAddFriendModalOpen(true)}
-                  className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs rounded-xl transition shadow-xs inline-flex items-center gap-1.5"
-                >
-                  <UserPlus className="w-4 h-4" />
-                  <span>友達を追加・検索する</span>
-                </button>
-              </div>
-            ) : (
-              filteredFriends.map((friend) => {
-                const room = rooms.find(
-                  (r) => !r.isGroup && r.members.some((m) => m.id === friend.id)
-                );
-                return (
-                  <div
-                    key={friend.id}
-                    onClick={() => {
-                      if (room) {
-                        onOpenChat(room.id);
-                      } else {
-                        onOpenNewChatModal();
-                      }
-                    }}
-                    className="p-3 flex items-center justify-between hover:bg-slate-50 cursor-pointer transition"
+            <div className="bg-white rounded-2xl border border-slate-200/80 divide-y divide-slate-100 overflow-hidden shadow-sm">
+              {filteredFriends.length === 0 ? (
+                <div className="p-6 text-center text-xs text-slate-500 space-y-3">
+                  <p className="font-bold text-slate-700">登録されている友達はいません (0人)</p>
+                  <p className="text-[11px] text-slate-400">「友達追加」から他のユーザーを検索して友達に追加できます。</p>
+                  <button
+                    onClick={() => setIsAddFriendModalOpen(true)}
+                    className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs rounded-xl transition shadow-xs inline-flex items-center gap-1.5"
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="relative">
-                        <img
-                          src={friend.avatar}
-                          alt={friend.name}
-                          className="w-11 h-11 rounded-full object-cover border border-slate-200"
-                        />
-                        {friend.isOnline && (
-                          <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-white rounded-full" />
-                        )}
+                    <UserPlus className="w-4 h-4" />
+                    <span>友達を追加・検索する</span>
+                  </button>
+                </div>
+              ) : (
+                filteredFriends.map((friend) => {
+                  const room = rooms.find(
+                    (r) => !r.isGroup && r.members.some((m) => m.id === friend.id)
+                  );
+                  return (
+                    <div
+                      key={friend.id}
+                      onClick={() => {
+                        if (room) {
+                          onOpenChat(room.id);
+                        } else {
+                          onOpenNewChatModal();
+                        }
+                      }}
+                      className="p-3 flex items-center justify-between hover:bg-slate-50 cursor-pointer transition"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="relative">
+                          <img
+                            src={friend.avatar}
+                            alt={friend.name}
+                            className="w-11 h-11 rounded-full object-cover border border-slate-200"
+                          />
+                          {friend.isOnline && (
+                            <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-white rounded-full" />
+                          )}
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-slate-900 text-sm">{friend.name}</h3>
+                          <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">
+                            {friend.statusMessage || 'ステータスメッセージなし'}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <h3 className="font-bold text-slate-900 text-sm">{friend.name}</h3>
-                        <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">
-                          {friend.statusMessage || 'ステータスメッセージなし'}
-                        </p>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (room) {
+                              onOpenChat(room.id);
+                            } else {
+                              onOpenNewChatModal();
+                            }
+                          }}
+                          title="トークを開く"
+                          className="p-2 hover:bg-slate-100 rounded-full text-slate-400 hover:text-emerald-600 transition"
+                        >
+                          <MessageSquare className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setFriendToRemove(friend);
+                          }}
+                          title="友達解除"
+                          className="p-2 hover:bg-rose-50 rounded-full text-slate-400 hover:text-rose-500 transition"
+                        >
+                          <UserX className="w-4 h-4" />
+                        </button>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (room) {
-                            onOpenChat(room.id);
-                          } else {
-                            onOpenNewChatModal();
-                          }
-                        }}
-                        title="トークを開く"
-                        className="p-2 hover:bg-slate-100 rounded-full text-slate-400 hover:text-emerald-600 transition"
-                      >
-                        <MessageSquare className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setFriendToRemove(friend);
-                        }}
-                        title="友達解除"
-                        className="p-2 hover:bg-rose-50 rounded-full text-slate-400 hover:text-rose-500 transition"
-                      >
-                        <UserX className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })
-            )}
+                  );
+                })
+              )}
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs font-bold text-slate-500 px-1">
+              <span>友達</span>
+              <span className="text-slate-400 font-normal">-</span>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-sm p-6 text-center text-xs text-slate-500 space-y-3">
+              <p className="font-bold text-slate-700">ログインすると友達を確認できます</p>
+              <p className="text-[11px] text-slate-400">アカウントにログイン・登録後、追加した友達が一覧で表示されます。</p>
+            </div>
+          </div>
+        )}
 
         {/* Remove Friend Confirm Modal */}
         {friendToRemove && (
@@ -391,35 +512,45 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                     追加可能なユーザーが見つかりません
                   </div>
                 ) : (
-                  searchedNonFriends.map((user) => (
-                    <div
-                      key={user.id}
-                      className="p-3 bg-slate-50 rounded-2xl border border-slate-200/70 flex items-center justify-between"
-                    >
-                      <div className="flex items-center gap-3">
-                        <img
-                          src={user.avatar}
-                          alt={user.name}
-                          className="w-10 h-10 rounded-full object-cover border border-slate-200"
-                        />
-                        <div>
-                          <div className="font-bold text-slate-900 text-xs">{user.name}</div>
-                          <div className="text-[10px] text-slate-400 mt-0.5 line-clamp-1">
-                            {user.statusMessage || `ID: ${user.id}`}
+                  searchedNonFriends.map((user) => {
+                    const isPending = outgoingPendingIds.has(user.id);
+                    return (
+                      <div
+                        key={user.id}
+                        className="p-3 bg-slate-50 rounded-2xl border border-slate-200/70 flex items-center justify-between"
+                      >
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={user.avatar}
+                            alt={user.name}
+                            className="w-10 h-10 rounded-full object-cover border border-slate-200"
+                          />
+                          <div>
+                            <div className="font-bold text-slate-900 text-xs">{user.name}</div>
+                            <div className="text-[10px] text-slate-400 mt-0.5 line-clamp-1">
+                              {user.statusMessage || `ID: ${user.id}`}
+                            </div>
                           </div>
                         </div>
+                        {isPending ? (
+                          <span className="px-3 py-1.5 bg-amber-100 text-amber-700 font-bold text-xs rounded-xl flex items-center gap-1">
+                            <Clock className="w-3.5 h-3.5" />
+                            <span>申請中</span>
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              if (onSendFriendRequest) onSendFriendRequest(user.id);
+                            }}
+                            className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs rounded-xl transition shadow-xs flex items-center gap-1"
+                          >
+                            <UserPlus className="w-3.5 h-3.5" />
+                            <span>友達申請</span>
+                          </button>
+                        )}
                       </div>
-                      <button
-                        onClick={() => {
-                          if (onAddFriend) onAddFriend(user.id);
-                        }}
-                        className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs rounded-xl transition shadow-xs flex items-center gap-1"
-                      >
-                        <UserPlus className="w-3.5 h-3.5" />
-                        <span>追加</span>
-                      </button>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>
@@ -427,7 +558,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
         )}
 
         {/* Groups */}
-        {groupRooms.length > 0 && (
+        {isLoggedIn && groupRooms.length > 0 && (
           <div className="space-y-2 pb-4">
             <div className="flex items-center justify-between text-xs font-bold text-slate-500 px-1">
               <span>グループ</span>

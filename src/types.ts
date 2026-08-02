@@ -11,6 +11,14 @@ export interface User {
 
 export type MessageType = 'text' | 'sticker' | 'image' | 'video' | 'voice' | 'system';
 
+// 引用リプライ元メッセージの要約情報
+export interface ReplyReference {
+  messageId: string;
+  senderName: string;
+  type: MessageType;
+  preview: string; // テキスト抜粋またはメディア種別ラベル
+}
+
 export interface Message {
   id: string;
   roomId: string;
@@ -21,6 +29,9 @@ export interface Message {
   content: string; // text, sticker URL/id, image URL, or audio URL
   timestamp: string; // ISO string or format
   readBy: string[]; // User IDs who have read this
+  replyTo?: ReplyReference; // 引用リプライ元
+  reactions?: Record<string, string[]>; // emoji -> リアクションしたユーザーIDの配列
+  deleted?: boolean; // 送信取消済みフラグ
   meta?: {
     duration?: number; // for voice
     fileName?: string;
@@ -46,6 +57,18 @@ export interface Sticker {
   name: string;
   emoji: string;
   imageUrl: string;
+}
+
+// 友達申請
+export type FriendRequestStatus = 'pending' | 'accepted' | 'rejected' | 'canceled';
+
+export interface FriendRequest {
+  id: string;
+  fromUserId: string;
+  toUserId: string;
+  status: FriendRequestStatus;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface MusicItem {
@@ -75,23 +98,37 @@ export interface CallState {
 
 export type WSMessageType =
   | 'init'
+  | 'identify'
   | 'join_room'
   | 'send_message'
   | 'new_message'
+  | 'delete_message'
+  | 'reaction'
   | 'typing'
   | 'read_messages'
   | 'presence'
+  | 'sync'
+  | 'sync_result'
   | 'create_room'
-  | 'user_update';
+  | 'user_update'
+  | 'friend_request';
 
 export interface WSMessagePayload {
   type: WSMessageType;
   userId?: string;
   roomId?: string;
   message?: Message;
+  messages?: Message[];
+  messageId?: string;
   user?: User;
   room?: ChatRoom;
   isTyping?: boolean;
   readMessageIds?: string[];
   onlineUsers?: string[];
+  emoji?: string;
+  reactions?: Record<string, string[]>;
+  since?: string; // sync: この時刻以降のメッセージを要求
+  isOnline?: boolean; // presence
+  lastSeen?: string; // presence
+  friendRequest?: FriendRequest;
 }
