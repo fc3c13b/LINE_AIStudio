@@ -5,7 +5,6 @@ import path from 'path';
 import fs from 'fs';
 import { WebSocketServer, WebSocket } from 'ws';
 import { GoogleGenAI } from '@google/genai';
-import { createServer as createViteServer } from 'vite';
 import { User, ChatRoom, Message, WSMessagePayload } from './src/types';
 import { usersRepo, roomsRepo, messagesRepo, initDatabase, backupDatabase } from './server/db';
 import { authRouter } from './server/authRoutes';
@@ -384,6 +383,8 @@ app.use('/api/admin', adminRouter);
 // Vite / Static setup
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
+    // vite は devDependencies のため本番ビルドには含めず動的インポート
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
