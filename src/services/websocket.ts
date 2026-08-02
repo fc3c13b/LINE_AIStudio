@@ -2,10 +2,12 @@ import { WSMessagePayload } from '../types';
 import { API_BASE_URL } from './api';
 
 type Listener = (data: WSMessagePayload) => void;
+type ConnectionListener = (connected: boolean) => void;
 
 class WebSocketService {
   private socket: WebSocket | null = null;
   private listeners: Set<Listener> = new Set();
+  private connectionListeners: Set<ConnectionListener> = new Set();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private isConnecting = false;
   private userId: string | null = null;
@@ -49,6 +51,7 @@ class WebSocketService {
           clearTimeout(this.reconnectTimer);
           this.reconnectTimer = null;
         }
+        this.connectionListeners.forEach((l) => l(true));
 
         // ユーザーを再関連付け
         if (this.userId) {
@@ -77,6 +80,7 @@ class WebSocketService {
       this.socket.onclose = () => {
         console.log('WebSocket connection closed. Retrying in 3 seconds...');
         this.isConnecting = false;
+        this.connectionListeners.forEach((l) => l(false));
         this.scheduleReconnect();
       };
 
@@ -104,6 +108,14 @@ class WebSocketService {
     this.listeners.add(listener);
     return () => {
       this.listeners.delete(listener);
+    };
+  }
+
+  // WS 接続/切断の状態変化を監視する
+  public onConnectionChange(listener: ConnectionListener): () => void {
+    this.connectionListeners.add(listener);
+    return () => {
+      this.connectionListeners.delete(listener);
     };
   }
 

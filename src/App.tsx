@@ -147,9 +147,22 @@ export default function App() {
       wsService.identify(account.id);
     }
 
+    // WS 接続/切断を isConnected に反映
+    const unsubConn = wsService.onConnectionChange(setIsConnected);
+
+    // 30秒毎にサーバーヘルスチェック（接続できなければ赤に変える）
+    const healthCheck = async () => {
+      try {
+        const res = await fetch(apiUrl('/api/health'), { signal: AbortSignal.timeout(5000) });
+        setIsConnected(res.ok);
+      } catch {
+        setIsConnected(false);
+      }
+    };
+    const healthTimer = setInterval(healthCheck, 30000);
+
     // WebSocket Event Listener
     const unsubscribe = wsService.subscribe((payload: WSMessagePayload) => {
-      setIsConnected(true);
 
       if (payload.type === 'init') {
         if (payload.onlineUsers) {
@@ -270,6 +283,8 @@ export default function App() {
 
     return () => {
       unsubscribe();
+      unsubConn();
+      clearInterval(healthTimer);
     };
   }, [activeRoomId]);
 

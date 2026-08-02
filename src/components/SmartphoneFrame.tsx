@@ -32,10 +32,16 @@ export const SmartphoneFrame: React.FC<SmartphoneFrameProps> = ({
       {/* Header bar with controls */}
       <header className="w-full max-w-4xl mb-3 flex items-center justify-between px-2 text-xs sm:text-sm text-slate-700">
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-[#00c300] animate-pulse" />
-          <span className="font-bold text-slate-900 tracking-wide">LINE スマフォアプリ</span>
-          <span className="hidden sm:inline-block px-2.5 py-0.5 text-[10px] bg-white border border-slate-200/80 rounded-full text-[#00c300] font-bold shadow-xs">
-            {isConnected ? 'WebSocket リアルタイム接続中' : 'WebSocket 接続中...'}
+          <div className={`w-3 h-3 rounded-full transition-colors ${
+            isConnected ? 'bg-[#00c300] animate-pulse' : 'bg-slate-400'
+          }`} />
+          <span className="font-bold text-slate-900 tracking-wide">LINE AIStudio</span>
+          <span className={`hidden sm:inline-block px-2.5 py-0.5 text-[10px] border rounded-full font-bold shadow-xs ${
+            isConnected
+              ? 'bg-white border-slate-200/80 text-[#00c300]'
+              : 'bg-red-50 border-red-200 text-red-500'
+          }`}>
+            {isConnected ? 'NASサーバー接続中' : 'サーバー未接続'}
           </span>
         </div>
 
