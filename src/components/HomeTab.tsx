@@ -77,9 +77,9 @@ export const HomeTab: React.FC<HomeTabProps> = ({
         <h1 className="text-xl font-bold text-slate-900 tracking-tight">ホーム</h1>
         <div className="flex items-center gap-2">
           <button
-            onClick={onOpenNewChatModal}
+            onClick={() => setIsAddFriendModalOpen(true)}
             className="p-2 hover:bg-slate-100 rounded-full text-slate-700 transition"
-            title="友達追加・トーク作成"
+            title="友達申請"
           >
             <UserPlus className="w-5 h-5" />
           </button>
@@ -260,15 +260,15 @@ export const HomeTab: React.FC<HomeTabProps> = ({
         {/* Action Quick Grid */}
         <div className="grid grid-cols-2 gap-2.5">
           <button
-            onClick={onOpenNewChatModal}
+            onClick={() => setIsAddFriendModalOpen(true)}
             className="p-3 bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-200/70 rounded-xl flex items-center gap-2.5 transition text-left"
           >
             <div className="w-9 h-9 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-sm">
               <UserPlus className="w-4 h-4" />
             </div>
             <div>
-              <div className="text-xs font-bold text-emerald-950">友達追加・グループ</div>
-              <div className="text-[10px] text-emerald-700 font-medium">新規トークを作成</div>
+              <div className="text-xs font-bold text-emerald-950">友達申請</div>
+              <div className="text-[10px] text-emerald-700 font-medium">IDで検索して申請</div>
             </div>
           </button>
 
