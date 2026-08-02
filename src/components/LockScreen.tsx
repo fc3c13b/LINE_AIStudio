@@ -4,7 +4,6 @@ import {
   Unlock,
   Eye,
   EyeOff,
-  LogOut,
   ShieldAlert,
   ArrowRight,
   KeyRound,
@@ -21,14 +20,12 @@ interface LockScreenProps {
   user: User;
   account: { id: string; name: string; email?: string };
   onUnlock: () => void;
-  onLogout: () => void;
 }
 
 export const LockScreen: React.FC<LockScreenProps> = ({
   user,
   account,
   onUnlock,
-  onLogout,
 }) => {
   const [mode, setMode] = useState<'unlock' | 'forgot_send' | 'forgot_reset'>('unlock');
 
@@ -167,15 +164,6 @@ export const LockScreen: React.FC<LockScreenProps> = ({
           <Lock className="w-3.5 h-3.5 text-emerald-400" />
           <span className="font-medium text-slate-300">画面ロック中</span>
         </div>
-        <button
-          type="button"
-          onClick={onLogout}
-          className="flex items-center gap-1 text-slate-400 hover:text-rose-400 transition-colors px-2 py-1 rounded-lg hover:bg-slate-800/60"
-          title="ログアウト"
-        >
-          <LogOut className="w-3.5 h-3.5" />
-          <span>ログアウト</span>
-        </button>
       </div>
 
       {/* Main Content */}

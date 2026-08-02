@@ -592,7 +592,6 @@ export default function App() {
           user={me}
           account={account}
           onUnlock={() => setIsAppLocked(false)}
-          onLogout={handleLogout}
         />
       ) : activeRoomId && currentRoom ? (
         /* If Chat Room is Active, render full ChatRoom */
@@ -666,6 +665,7 @@ export default function App() {
             <SettingsTab
               currentUser={me}
               accountEmail={account?.email}
+              isLoggedIn={!!account}
               onUpdateProfile={handleUpdateProfile}
               onResetDatabase={handleResetDatabase}
               onOpenAuthModal={(mode = 'login') =>
