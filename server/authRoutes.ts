@@ -1,5 +1,5 @@
 import express from 'express';
-import { accountsRepo, usersRepo, resetTokensRepo, hashPassword, verifyPassword, Account } from './db';
+import { accountsRepo, usersRepo, hashPassword, verifyPassword, Account } from './db';
 import { User } from '../src/types';
 
 export const authRouter = express.Router();
@@ -26,11 +26,9 @@ function enforceRateLimit(req: express.Request, res: express.Response): boolean 
   return true;
 }
 
-// S-07: パスワードポリシー検証（8文字以上 + 数字または記号を含む）
+// S-07: パスワードポリシー検証（4文字以上）
 function validatePassword(password: string): string | null {
-  if (password.length < 8) return 'パスワードは8文字以上で指定してください。';
-  if (!/[0-9!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password))
-    return 'パスワードには数字または記号（!@#$など）を1文字以上含めてください。';
+  if (password.length < 4) return 'パスワードは4文字以上で指定してください。';
   return null;
 }
 
@@ -71,7 +69,7 @@ authRouter.post('/register', (req, res) => {
     avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(name.trim())}`,
     statusMessage: isAdminAccount ? 'System Administrator' : 'HELLO WORLD',
     isOnline: true,
-    isOfficial: isAdminAccount === 1,
+    isOfficial: false,
     friendIds: [],
   };
 
@@ -99,7 +97,13 @@ authRouter.post('/login', (req, res) => {
   const account = accountsRepo.getByName(name);
 
   if (!account || !verifyPassword(password, account.passwordHash, account.salt)) {
-    return res.status(401).json({ error: 'ユーザー名またはパスワードが正しくありません。' });
+    // サブパスワードも確認
+    const sub = account && (account as any).passwordHash2 && (account as any).salt2
+      ? verifyPassword(password, (account as any).passwordHash2, (account as any).salt2)
+      : false;
+    if (!account || !sub) {
+      return res.status(401).json({ error: 'ユーザー名またはパスワードが正しくありません。' });
+    }
   }
 
   let user = usersRepo.get(account.id);
@@ -149,75 +153,45 @@ authRouter.post('/verify-password', (req, res) => {
     return res.status(404).json({ error: 'アカウントが見つかりません。' });
   }
 
-  if (!verifyPassword(password, account.passwordHash, account.salt)) {
+  const pass1Ok = verifyPassword(password, account.passwordHash, account.salt);
+  const pass2Ok = (account as any).passwordHash2 && (account as any).salt2
+    ? verifyPassword(password, (account as any).passwordHash2, (account as any).salt2)
+    : false;
+  if (!pass1Ok && !pass2Ok) {
     return res.status(401).json({ error: 'パスワードが正しくありません。' });
   }
 
   return res.json({ success: true, message: 'パスワード照合成功' });
 });
 
-// パスワード忘れ・再設定コード送信
-authRouter.post('/forgot-password', (req, res) => {
-  const { email } = req.body;
+// サブパスワード設定
+authRouter.post('/set-secondary-password', (req, res) => {
+  const { accountId, currentPassword, newPassword2 } = req.body;
 
-  if (!email) {
-    return res.status(400).json({ error: 'メールアドレスを入力してください。' });
+  if (!accountId || !currentPassword) {
+    return res.status(400).json({ error: '現在のパスワードを入力してください。' });
   }
 
-  const account = accountsRepo.getByEmail(email);
-
+  const account = accountsRepo.getById(accountId);
   if (!account) {
-    return res.json({
-      success: true,
-      message: '入力されたメールアドレスにパスワード再設定コードを発行しました（登録がない場合もメッセージは共通です）。',
-    });
+    return res.status(404).json({ error: 'アカウントが見つかりません。' });
+  }
+  if (!verifyPassword(currentPassword, account.passwordHash, account.salt)) {
+    return res.status(401).json({ error: '現在のパスワードが正しくありません。' });
   }
 
-  const code = Math.floor(100000 + Math.random() * 900000).toString();
-  const expiresAt = Date.now() + 15 * 60 * 1000; // 15分有効
-
-  const normalizedEmail = email.trim().toLowerCase();
-  resetTokensRepo.deleteByEmail(normalizedEmail);
-  resetTokensRepo.insert({ email: normalizedEmail, code, expiresAt });
-
-  console.log(`[AUTH] Password reset requested for ${normalizedEmail}. Reset Code: [ ${code} ]`);
-
-  res.json({
-    success: true,
-    message: 'パスワード再設定コードを発行しました。下の「再設定コード」に入力してください。',
-    devCode: code,
-  });
-});
-
-// パスワード再設定処理
-authRouter.post('/reset-password', (req, res) => {
-  const { email, code, newPassword } = req.body;
-
-  if (!email || !code || !newPassword) {
-    return res.status(400).json({ error: 'すべての項目を入力してください。' });
+  if (!newPassword2) {
+    // クリア
+    accountsRepo.setSecondaryPassword(accountId, null, null);
+    return res.json({ success: true, message: 'サブパスワードを削除しました。' });
   }
 
-  const pwError = validatePassword(newPassword);
+  const pwError = validatePassword(newPassword2);
   if (pwError) return res.status(400).json({ error: pwError });
 
-  const token = resetTokensRepo.findValid(email, code);
-  if (!token) {
-    return res.status(400).json({ error: '再設定コードが無効か、有効期限（15分）が切れています。' });
-  }
+  const { hash, salt } = hashPassword(newPassword2);
+  accountsRepo.setSecondaryPassword(accountId, hash, salt);
 
-  const account = accountsRepo.getByEmail(email);
-  if (!account) {
-    return res.status(400).json({ error: 'アカウントが見つかりません。' });
-  }
-
-  const { hash, salt } = hashPassword(newPassword);
-  accountsRepo.updatePassword(account.id, hash, salt);
-  resetTokensRepo.deleteByEmail(email);
-
-  console.log(`[AUTH] Password reset completed for ${email.trim().toLowerCase()}`);
-
-  res.json({
-    success: true,
-    message: 'パスワードが正常に再設定されました。新しいパスワードでログインしてください。',
-  });
+  console.log(`[AUTH] Secondary password set for account: ${account.name}`);
+  return res.json({ success: true, message: 'サブパスワードを設定しました。' });
 });

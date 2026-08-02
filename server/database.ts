@@ -19,6 +19,8 @@ export interface Account {
   salt: string;
   createdAt: string;
   isAdmin?: number; // 1 = admin
+  passwordHash2?: string | null;
+  salt2?: string | null;
 }
 
 export interface ResetToken {
@@ -122,6 +124,8 @@ sqlite.exec(`
 // 既存DBへの後方互換: prepared statement 作成前に列を追加
  try { sqlite.exec(`ALTER TABLE users ADD COLUMN isSuspended INTEGER DEFAULT 0`); } catch { /* already exists */ }
 try { sqlite.exec(`ALTER TABLE accounts ADD COLUMN isAdmin INTEGER DEFAULT 0`); } catch { /* already exists */ }
+try { sqlite.exec(`ALTER TABLE accounts ADD COLUMN passwordHash2 TEXT`); } catch { /* already exists */ }
+try { sqlite.exec(`ALTER TABLE accounts ADD COLUMN salt2 TEXT`); } catch { /* already exists */ }
 
 // D-02: メッセージ全文検索 (FTS5)。未対応環境ではLIKEにフォールバック
 let ftsEnabled = false;
@@ -257,6 +261,9 @@ export const accountsRepo = {
     sqlite.prepare(
       `INSERT INTO accounts (id, name, email, passwordHash, salt, createdAt, isAdmin) VALUES (?, ?, ?, ?, ?, ?, ?)`
     ).run(a.id, a.name, a.email, a.passwordHash, a.salt, a.createdAt, a.isAdmin ?? 0);
+  },
+  setSecondaryPassword(id: string, passwordHash2: string | null, salt2: string | null): void {
+    sqlite.prepare('UPDATE accounts SET passwordHash2 = ?, salt2 = ? WHERE id = ?').run(passwordHash2, salt2, id);
   },
   updatePassword(id: string, passwordHash: string, salt: string): void {
     sqlite.prepare('UPDATE accounts SET passwordHash = ?, salt = ? WHERE id = ?').run(passwordHash, salt, id);

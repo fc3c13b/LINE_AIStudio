@@ -736,6 +736,7 @@ export default function App() {
             <SettingsTab
               currentUser={me}
               accountEmail={account?.email}
+              accountId={account?.id}
               isLoggedIn={!!account}
               isAdmin={!!account?.isAdmin}
               chatSettings={chatSettings}

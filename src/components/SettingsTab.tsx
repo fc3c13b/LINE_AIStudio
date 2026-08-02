@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   MessageSquare,
   ChevronLeft,
+  KeyRound,
 } from 'lucide-react';
 import { apiUrl } from '../services/api';
 
@@ -37,13 +38,14 @@ export const DEFAULT_CHAT_SETTINGS: ChatSettings = {
 interface SettingsTabProps {
   currentUser: User;
   accountEmail?: string;
+  accountId?: string;
   isLoggedIn?: boolean;
   isAdmin?: boolean;
   chatSettings: ChatSettings;
   onChatSettingsChange: (s: ChatSettings) => void;
   onUpdateProfile: (name: string, statusMessage: string, avatar: string) => void;
   onResetDatabase: () => void;
-  onOpenAuthModal: (mode?: 'login' | 'register' | 'forgot') => void;
+  onOpenAuthModal: (mode?: 'login' | 'register') => void;
   onLogout: () => void;
   onLockApp?: () => void;
   isConnected: boolean;
@@ -53,6 +55,7 @@ interface SettingsTabProps {
 export const SettingsTab: React.FC<SettingsTabProps> = ({
   currentUser,
   accountEmail,
+  accountId,
   isLoggedIn = false,
   isAdmin = false,
   chatSettings,
@@ -70,6 +73,35 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
   const [avatar, setAvatar] = useState(currentUser.avatar);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
+
+  // サブパスワード設定用
+  const [subPwCurrent, setSubPwCurrent] = useState('');
+  const [subPwNew, setSubPwNew] = useState('');
+  const [subPwMsg, setSubPwMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const [subPwLoading, setSubPwLoading] = useState(false);
+
+  const handleSetSubPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!accountId) return;
+    setSubPwMsg(null);
+    setSubPwLoading(true);
+    try {
+      const res = await fetch(apiUrl('/api/auth/set-secondary-password'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accountId, currentPassword: subPwCurrent, newPassword2: subPwNew || undefined }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '失敗しました');
+      setSubPwMsg({ type: 'ok', text: data.message });
+      setSubPwCurrent('');
+      setSubPwNew('');
+    } catch (err: any) {
+      setSubPwMsg({ type: 'err', text: err.message });
+    } finally {
+      setSubPwLoading(false);
+    }
+  };
 
   // 写真を選択→Canvas で 1:1 クロップ→base64 で avatar に設定
   const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -381,9 +413,51 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
           ))}
         </div>
 
+        {/* サブパスワード設定 */}
+        {isLoggedIn && accountId && (
+          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
+            <h2 className="font-bold text-sm text-slate-900 flex items-center gap-2">
+              <KeyRound className="w-4 h-4 text-emerald-500" />
+              <span>サブパスワード設定</span>
+            </h2>
+            <p className="text-xs text-slate-500">メインとサブのどちらでもロック解除できます。サブパスワードを削除するには「新しいサブパスワード」を空欄にして保存してください。</p>
+            <form onSubmit={handleSetSubPassword} className="space-y-2">
+              <input
+                type="password"
+                required
+                placeholder="現在のパスワード（確認）"
+                value={subPwCurrent}
+                onChange={(e) => setSubPwCurrent(e.target.value)}
+                minLength={4}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-emerald-400"
+              />
+              <input
+                type="password"
+                placeholder="新しいサブパスワード（空欄で削除）"
+                value={subPwNew}
+                onChange={(e) => setSubPwNew(e.target.value)}
+                minLength={subPwNew ? 4 : undefined}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-emerald-400"
+              />
+              {subPwMsg && (
+                <p className={`text-xs px-2 py-1 rounded-lg ${subPwMsg.type === 'ok' ? 'text-emerald-600 bg-emerald-50' : 'text-rose-600 bg-rose-50'}`}>
+                  {subPwMsg.text}
+                </p>
+              )}
+              <button
+                type="submit"
+                disabled={subPwLoading || !subPwCurrent}
+                className="w-full py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold rounded-xl disabled:opacity-50 transition"
+              >
+                {subPwLoading ? '保存中...' : 'サブパスワードを保存'}
+              </button>
+            </form>
+          </div>
+        )}
+
         {/* バージョン表示 */}
         <div className="text-center py-3 text-[10px] text-slate-400 font-mono">
-          LINE AIStudio v0.5.9
+          LINE AIStudio v0.5.13
         </div>
       </div>
     </div>
