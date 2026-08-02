@@ -38,6 +38,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddFriendModalOpen, setIsAddFriendModalOpen] = useState(false);
   const [friendSearchQuery, setFriendSearchQuery] = useState('');
+  const [friendSearchResult, setFriendSearchResult] = useState<typeof nonFriends | null>(null);
   const [friendToRemove, setFriendToRemove] = useState<User | null>(null);
 
   // Filter friends (must be in currentUser.friendIds)
@@ -61,14 +62,19 @@ export const HomeTab: React.FC<HomeTabProps> = ({
     (u) => u.id !== currentUser.id && !u.isOfficial && !userFriendIds.includes(u.id)
   );
 
-  // 2文字以上入力しないと候補を表示しない（全ユーザー一覧の露出防止）
-  const searchedNonFriends = friendSearchQuery.trim().length >= 2
-    ? nonFriends.filter(
-        (u) =>
-          u.name.toLowerCase().includes(friendSearchQuery.toLowerCase()) ||
-          u.id.toLowerCase().includes(friendSearchQuery.toLowerCase())
-      )
-    : [];
+  // 検索ボタン押下時のみ完全一致で検索
+  const handleFriendSearch = () => {
+    const q = friendSearchQuery.trim().toLowerCase();
+    if (!q) { setFriendSearchResult([]); return; }
+    const result = nonFriends.filter((u) => u.name.toLowerCase() === q);
+    setFriendSearchResult(result);
+  };
+
+  const handleCloseFriendModal = () => {
+    setIsAddFriendModalOpen(false);
+    setFriendSearchQuery('');
+    setFriendSearchResult(null);
+  };
 
   return (
     <div className="flex-1 flex flex-col bg-slate-50 overflow-y-auto">
@@ -487,9 +493,9 @@ export const HomeTab: React.FC<HomeTabProps> = ({
           <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
             <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden border border-slate-200 flex flex-col max-h-[85vh]">
               <div className="p-4 border-b border-slate-200 flex items-center justify-between">
-                <h2 className="font-bold text-base text-slate-900">友達追加 (ユーザー検索)</h2>
+                <h2 className="font-bold text-base text-slate-900">友達申請</h2>
                 <button
-                  onClick={() => setIsAddFriendModalOpen(false)}
+                  onClick={handleCloseFriendModal}
                   className="p-1.5 hover:bg-slate-100 rounded-full text-slate-500 transition"
                 >
                   ✕
@@ -497,63 +503,79 @@ export const HomeTab: React.FC<HomeTabProps> = ({
               </div>
 
               <div className="p-3 bg-slate-50 border-b border-slate-200/80">
-                <div className="relative">
-                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    value={friendSearchQuery}
-                    onChange={(e) => setFriendSearchQuery(e.target.value)}
-                    placeholder="名前またはIDで検索"
-                    className="w-full bg-white border border-slate-200 pl-9 pr-3 py-2 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                  />
+                <p className="text-[11px] text-slate-500 mb-2">ユーザー名を正確に入力して検索してください</p>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={friendSearchQuery}
+                      onChange={(e) => { setFriendSearchQuery(e.target.value); setFriendSearchResult(null); }}
+                      onKeyDown={(e) => e.key === 'Enter' && handleFriendSearch()}
+                      placeholder="ユーザー名を入力"
+                      className="w-full bg-white border border-slate-200 pl-9 pr-3 py-2 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                    />
+                  </div>
+                  <button
+                    onClick={handleFriendSearch}
+                    className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs rounded-xl transition"
+                  >
+                    検索
+                  </button>
                 </div>
               </div>
 
-              <div className="p-4 flex-1 overflow-y-auto space-y-3">
-                {searchedNonFriends.length === 0 ? (
+              <div className="p-4 flex-1 overflow-y-auto">
+                {friendSearchResult === null ? (
                   <div className="text-center py-8 text-xs text-slate-400">
-                    追加可能なユーザーが見つかりません
+                    ユーザー名を入力して「検索」を押してください
+                  </div>
+                ) : friendSearchResult.length === 0 ? (
+                  <div className="text-center py-8 text-xs text-slate-400">
+                    「{friendSearchQuery}」に一致するユーザーが見つかりません
                   </div>
                 ) : (
-                  searchedNonFriends.map((user) => {
-                    const isPending = outgoingPendingIds.has(user.id);
-                    return (
-                      <div
-                        key={user.id}
-                        className="p-3 bg-slate-50 rounded-2xl border border-slate-200/70 flex items-center justify-between"
-                      >
-                        <div className="flex items-center gap-3">
-                          <img
-                            src={user.avatar}
-                            alt={user.name}
-                            className="w-10 h-10 rounded-full object-cover border border-slate-200"
-                          />
-                          <div>
-                            <div className="font-bold text-slate-900 text-xs">{user.name}</div>
-                            <div className="text-[10px] text-slate-400 mt-0.5 line-clamp-1">
-                              {user.statusMessage || `ID: ${user.id}`}
+                  <div className="space-y-3">
+                    {friendSearchResult.map((user) => {
+                      const isPending = outgoingPendingIds.has(user.id);
+                      return (
+                        <div
+                          key={user.id}
+                          className="p-3 bg-slate-50 rounded-2xl border border-slate-200/70 flex items-center justify-between"
+                        >
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={user.avatar}
+                              alt={user.name}
+                              className="w-10 h-10 rounded-full object-cover border border-slate-200"
+                            />
+                            <div>
+                              <div className="font-bold text-slate-900 text-xs">{user.name}</div>
+                              <div className="text-[10px] text-slate-400 mt-0.5 line-clamp-1">
+                                {user.statusMessage || `ユーザー`}
+                              </div>
                             </div>
                           </div>
+                          {isPending ? (
+                            <span className="px-3 py-1.5 bg-amber-100 text-amber-700 font-bold text-xs rounded-xl flex items-center gap-1">
+                              <Clock className="w-3.5 h-3.5" />
+                              <span>申請中</span>
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                if (onSendFriendRequest) onSendFriendRequest(user.id);
+                              }}
+                              className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs rounded-xl transition shadow-xs flex items-center gap-1"
+                            >
+                              <UserPlus className="w-3.5 h-3.5" />
+                              <span>友達申請</span>
+                            </button>
+                          )}
                         </div>
-                        {isPending ? (
-                          <span className="px-3 py-1.5 bg-amber-100 text-amber-700 font-bold text-xs rounded-xl flex items-center gap-1">
-                            <Clock className="w-3.5 h-3.5" />
-                            <span>申請中</span>
-                          </span>
-                        ) : (
-                          <button
-                            onClick={() => {
-                              if (onSendFriendRequest) onSendFriendRequest(user.id);
-                            }}
-                            className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs rounded-xl transition shadow-xs flex items-center gap-1"
-                          >
-                            <UserPlus className="w-3.5 h-3.5" />
-                            <span>友達申請</span>
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             </div>
