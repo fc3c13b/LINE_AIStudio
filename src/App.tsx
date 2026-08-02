@@ -69,6 +69,7 @@ export default function App() {
   // Screen lock state
   const [isAppLocked, setIsAppLocked] = useState(false);
   const [appMode, setAppMode] = useState<'solitaire' | 'line'>('solitaire');
+  const [showSolitaire, setShowSolitaire] = useState(false);
 
   const lockToSolitaire = () => { setIsAppLocked(true); setAppMode('solitaire'); };
 
@@ -658,6 +659,8 @@ export default function App() {
           account={account}
           onUnlock={() => setIsAppLocked(false)}
         />
+      ) : showSolitaire ? (
+        <SolitaireGame onSecretCode={() => {}} onClose={() => setShowSolitaire(false)} />
       ) : activeRoomId && currentRoom ? (
         /* If Chat Room is Active, render full ChatRoom */
         <ChatRoomComponent
@@ -702,6 +705,7 @@ export default function App() {
               onAcceptFriendRequest={handleAcceptFriendRequest}
               onRejectFriendRequest={handleRejectFriendRequest}
               onCancelFriendRequest={handleCancelFriendRequest}
+              onOpenSolitaire={() => setShowSolitaire(true)}
             />
           )}
 

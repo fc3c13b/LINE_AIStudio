@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { User, ChatRoom, FriendRequest } from '../types';
-import { Search, UserPlus, Users, Sparkles, ChevronRight, MessageSquare, ShieldCheck, Settings, UserX, Check, X, Clock, Bell } from 'lucide-react';
+import { Search, UserPlus, Users, ChevronRight, MessageSquare, Settings, UserX, Check, X, Clock, Bell } from 'lucide-react';
 
 interface HomeTabProps {
   currentUser: User;
@@ -17,6 +17,7 @@ interface HomeTabProps {
   onAcceptFriendRequest?: (requestId: string) => void;
   onRejectFriendRequest?: (requestId: string) => void;
   onCancelFriendRequest?: (requestId: string) => void;
+  onOpenSolitaire?: () => void;
 }
 
 export const HomeTab: React.FC<HomeTabProps> = ({
@@ -34,6 +35,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   onAcceptFriendRequest,
   onRejectFriendRequest,
   onCancelFriendRequest,
+  onOpenSolitaire,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddFriendModalOpen, setIsAddFriendModalOpen] = useState(false);
@@ -44,7 +46,6 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   // Filter friends (must be in currentUser.friendIds)
   const userFriendIds = currentUser.friendIds || [];
   const friends = users.filter((u) => u.id !== currentUser.id && !u.isOfficial && userFriendIds.includes(u.id));
-  const officialAccounts = users.filter((u) => u.isOfficial);
   const groupRooms = rooms.filter((r) => r.isGroup);
 
   // 申請中の相手ID集合（送信済み）
@@ -307,48 +308,19 @@ export const HomeTab: React.FC<HomeTabProps> = ({
           )}
         </div>
 
-        {/* Official Accounts */}
-        {officialAccounts.length > 0 && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-xs font-bold text-slate-500 px-1">
-              <span>公式アカウント</span>
-              <span className="text-slate-400 font-normal">{officialAccounts.length}</span>
-            </div>
-
-            <div className="bg-white rounded-2xl border border-slate-200/80 divide-y divide-slate-100 overflow-hidden shadow-sm">
-              {officialAccounts.map((acc) => (
-                <div
-                  key={acc.id}
-                  onClick={() => onOpenChat('room-ai')}
-                  className="p-3 flex items-center justify-between hover:bg-slate-50 cursor-pointer transition"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="relative">
-                      <img
-                        src={acc.avatar}
-                        alt={acc.name}
-                        className="w-11 h-11 rounded-full object-cover border border-slate-200"
-                      />
-                      <ShieldCheck className="w-4 h-4 text-emerald-500 fill-emerald-100 absolute -bottom-1 -right-1" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-bold text-slate-900 text-sm">{acc.name}</span>
-                        <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded">
-                          公式
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">{acc.statusMessage}</p>
-                    </div>
-                  </div>
-                  <button className="px-3 py-1 bg-emerald-500 text-white text-xs font-bold rounded-full hover:bg-emerald-600 transition shadow-sm">
-                    トーク
-                  </button>
-                </div>
-              ))}
-            </div>
+        {/* ソリティアボタン */}
+        <button
+          onClick={onOpenSolitaire}
+          className="w-full p-3 bg-emerald-950/10 hover:bg-emerald-950/20 border border-emerald-800/25 rounded-xl flex items-center gap-2.5 transition text-left"
+        >
+          <div className="w-9 h-9 rounded-full bg-emerald-900 text-white flex items-center justify-center shrink-0 shadow-sm text-lg font-black">
+            ♠
           </div>
-        )}
+          <div>
+            <div className="text-xs font-bold text-slate-900">ソリティア</div>
+            <div className="text-[10px] text-slate-500 font-medium">カードゲームを起動</div>
+          </div>
+        </button>
 
         {/* Friends List */}
         {isLoggedIn ? (

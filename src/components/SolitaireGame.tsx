@@ -1,5 +1,5 @@
 ﻿import React, { useState, useCallback, useRef } from 'react';
-import { RotateCcw, Lightbulb, Undo2, Trophy } from 'lucide-react';
+import { RotateCcw, Lightbulb, Undo2, Trophy, ArrowLeft } from 'lucide-react';
 
 type Suit = 'S' | 'H' | 'D' | 'C';
 interface Card { id: string; suit: Suit; rank: number; faceUp: boolean; }
@@ -11,6 +11,15 @@ const SUITS: Suit[] = ['S', 'H', 'D', 'C'];
 const SYM: Record<Suit, string> = { S: '♠', H: '♥', D: '♦', C: '♣' };
 const RNKS = ['', 'A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
 const isRed = (s: Suit) => s === 'H' || s === 'D';
+
+// 裏面デザイン選択
+type CardDesign = 'blue' | 'red' | 'dark' | 'green';
+const DESIGNS: { id: CardDesign; label: string; bg: string; dot: string }[] = [
+  { id: 'blue',  label: '青', bg: 'linear-gradient(135deg,#1565c0,#0d47a1)', dot: '#1e88e5' },
+  { id: 'red',   label: '赤', bg: 'linear-gradient(135deg,#c62828,#7f0000)', dot: '#e53935' },
+  { id: 'dark',  label: '黒', bg: 'linear-gradient(135deg,#263238,#37474f)', dot: '#455a64' },
+  { id: 'green', label: '緑', bg: 'linear-gradient(135deg,#1b5e20,#2e7d32)', dot: '#43a047' },
+];
 
 // 隠し操作: やり直す → ヒント → 1枚戻す の順に2秒以内に押すとLINEへ切り替わる
 const SECRET: BtnId[] = ['restart', 'hint', 'undo'];
@@ -72,12 +81,19 @@ const btnStyle: React.CSSProperties = {
   WebkitTapHighlightColor: 'transparent',
 };
 
-export const SolitaireGame: React.FC<{ onSecretCode: () => void }> = ({ onSecretCode }) => {
+export const SolitaireGame: React.FC<{ onSecretCode: () => void; onClose?: () => void }> = ({ onSecretCode, onClose }) => {
   const [gs, setGs] = useState<GS>(deal);
   const [hist, setHist] = useState<GS[]>([]);
   const [sel, setSel] = useState<Sel>(null);
   const [hintId, setHintId] = useState<string | null>(null);
   const [won, setWon] = useState(false);
+  const [cardDesign, setCardDesign] = useState<CardDesign>(
+    () => (localStorage.getItem('solitaire_design') as CardDesign) || 'blue'
+  );
+  const handleDesignChange = (d: CardDesign) => {
+    setCardDesign(d);
+    localStorage.setItem('solitaire_design', d);
+  };
   const seqRef = useRef<BtnId[]>([]);
   const tmRef = useRef<ReturnType<typeof setTimeout>>();
 
@@ -203,7 +219,7 @@ export const SolitaireGame: React.FC<{ onSecretCode: () => void }> = ({ onSecret
     if (!card.faceUp) return (
       <div key={card.id} onClick={onClick} style={{
         width: CW, height: CH, borderRadius: 6, cursor: 'pointer', flexShrink: 0,
-        background: 'linear-gradient(135deg,#1565c0,#0d47a1)',
+        background: DESIGNS.find(d => d.id === cardDesign)!.bg,
         border: '2px solid rgba(255,255,255,0.25)', ...extra,
       }}>
         <div style={{
@@ -255,14 +271,34 @@ export const SolitaireGame: React.FC<{ onSecretCode: () => void }> = ({ onSecret
 
   return (
     <div style={{
-      height: '100%', width: '100%',
+      flex: 1, minHeight: 0,
+      width: '100%',
       background: 'linear-gradient(160deg,#1b5e20 0%,#2e7d32 60%,#1b5e20 100%)',
       display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative',
     }}>
       {/* タイトルバー */}
-      <div style={{ padding: '10px 12px 4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ padding: '10px 12px 4px', display: 'flex', alignItems: 'center', gap: 6 }}>
+        {onClose && (
+          <button onClick={onClose} style={{
+            background: 'none', border: 'none', cursor: 'pointer', color: '#fff',
+            padding: '2px 4px 2px 0', display: 'flex', alignItems: 'center',
+          }}>
+            <ArrowLeft size={22} />
+          </button>
+        )}
         <span style={{ color: '#fff', fontWeight: 800, fontSize: 17 }}>♠ ソリティア</span>
-        <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12 }}>スコア: {score}</span>
+        <div style={{ flex: 1 }} />
+        {/* 裏面デザイン選択 */}
+        {DESIGNS.map(d => (
+          <button key={d.id} onClick={() => handleDesignChange(d.id)} title={d.label} style={{
+            width: 18, height: 18, borderRadius: '50%', background: d.dot, padding: 0,
+            border: `2px solid ${cardDesign === d.id ? '#fff' : 'rgba(255,255,255,0.3)'}`,
+            cursor: 'pointer', flexShrink: 0,
+            transform: cardDesign === d.id ? 'scale(1.2)' : 'scale(1)',
+            transition: 'transform 0.15s',
+          }} />
+        ))}
+        <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, marginLeft: 6 }}>スコア: {score}</span>
       </div>
 
       {/* 山札・捨て札・ファンデーション */}
