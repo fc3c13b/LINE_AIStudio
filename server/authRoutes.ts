@@ -1,5 +1,5 @@
 import express from 'express';
-import { db, saveDatabase, hashPassword, verifyPassword, Account } from './db';
+import { accountsRepo, usersRepo, resetTokensRepo, hashPassword, verifyPassword, Account } from './db';
 import { User } from '../src/types';
 
 export const authRouter = express.Router();
@@ -12,8 +12,7 @@ authRouter.post('/register', (req, res) => {
     return res.status(400).json({ error: 'ユーザー名とパスワードを入力してください。' });
   }
 
-  const normalizedName = name.trim().toLocaleLowerCase();
-  if (db.accounts.some((a) => a.name.trim().toLocaleLowerCase() === normalizedName)) {
+  if (accountsRepo.getByName(name)) {
     return res.status(400).json({ error: 'このユーザー名は既に登録されています。' });
   }
 
@@ -42,9 +41,8 @@ authRouter.post('/register', (req, res) => {
     friendIds: [],
   };
 
-  db.accounts.push(newAccount);
-  db.users.push(newUser);
-  saveDatabase();
+  accountsRepo.insert(newAccount);
+  usersRepo.upsert(newUser);
 
   console.log(`[AUTH] Registered new user: ${name}`);
 
@@ -62,14 +60,13 @@ authRouter.post('/login', (req, res) => {
     return res.status(400).json({ error: 'ユーザー名とパスワードを入力してください。' });
   }
 
-  const normalizedName = name.trim().toLocaleLowerCase();
-  const account = db.accounts.find((a) => a.name.trim().toLocaleLowerCase() === normalizedName);
+  const account = accountsRepo.getByName(name);
 
   if (!account || !verifyPassword(password, account.passwordHash, account.salt)) {
     return res.status(401).json({ error: 'ユーザー名またはパスワードが正しくありません。' });
   }
 
-  let user = db.users.find((u) => u.id === account.id);
+  let user = usersRepo.get(account.id);
   if (!user) {
     user = {
       id: account.id,
@@ -79,12 +76,11 @@ authRouter.post('/login', (req, res) => {
       isOnline: true,
       friendIds: [],
     };
-    db.users.push(user);
-    saveDatabase();
+    usersRepo.upsert(user);
   } else {
     user.isOnline = true;
     if (!user.friendIds) user.friendIds = [];
-    saveDatabase();
+    usersRepo.upsert(user);
   }
 
   console.log(`[AUTH] User logged in: ${account.name}`);
@@ -103,12 +99,11 @@ authRouter.post('/verify-password', (req, res) => {
     return res.status(400).json({ error: 'パスワードを入力してください。' });
   }
 
-  let account;
+  let account: Account | undefined;
   if (email) {
-    const normalizedEmail = email.trim().toLowerCase();
-    account = db.accounts.find((a) => a.email.toLowerCase() === normalizedEmail);
+    account = accountsRepo.getByEmail(email);
   } else if (accountId) {
-    account = db.accounts.find((a) => a.id === accountId);
+    account = accountsRepo.getById(accountId);
   }
 
   if (!account) {
@@ -130,8 +125,7 @@ authRouter.post('/forgot-password', (req, res) => {
     return res.status(400).json({ error: 'メールアドレスを入力してください。' });
   }
 
-  const normalizedEmail = email.trim().toLowerCase();
-  const account = db.accounts.find((a) => a.email.toLowerCase() === normalizedEmail);
+  const account = accountsRepo.getByEmail(email);
 
   if (!account) {
     return res.json({
@@ -143,9 +137,9 @@ authRouter.post('/forgot-password', (req, res) => {
   const code = Math.floor(100000 + Math.random() * 900000).toString();
   const expiresAt = Date.now() + 15 * 60 * 1000; // 15分有効
 
-  db.resetTokens = db.resetTokens.filter((t) => t.email.toLowerCase() !== normalizedEmail);
-  db.resetTokens.push({ email: normalizedEmail, code, expiresAt });
-  saveDatabase();
+  const normalizedEmail = email.trim().toLowerCase();
+  resetTokensRepo.deleteByEmail(normalizedEmail);
+  resetTokensRepo.insert({ email: normalizedEmail, code, expiresAt });
 
   console.log(`[AUTH] Password reset requested for ${normalizedEmail}. Reset Code: [ ${code} ]`);
 
@@ -168,28 +162,21 @@ authRouter.post('/reset-password', (req, res) => {
     return res.status(400).json({ error: '新しいパスワードは6文字以上で指定してください。' });
   }
 
-  const normalizedEmail = email.trim().toLowerCase();
-  const tokenIndex = db.resetTokens.findIndex(
-    (t) => t.email.toLowerCase() === normalizedEmail && t.code === code.trim() && t.expiresAt > Date.now()
-  );
-
-  if (tokenIndex === -1) {
+  const token = resetTokensRepo.findValid(email, code);
+  if (!token) {
     return res.status(400).json({ error: '再設定コードが無効か、有効期限（15分）が切れています。' });
   }
 
-  const account = db.accounts.find((a) => a.email.toLowerCase() === normalizedEmail);
+  const account = accountsRepo.getByEmail(email);
   if (!account) {
     return res.status(400).json({ error: 'アカウントが見つかりません。' });
   }
 
   const { hash, salt } = hashPassword(newPassword);
-  account.passwordHash = hash;
-  account.salt = salt;
+  accountsRepo.updatePassword(account.id, hash, salt);
+  resetTokensRepo.deleteByEmail(email);
 
-  db.resetTokens.splice(tokenIndex, 1);
-  saveDatabase();
-
-  console.log(`[AUTH] Password reset completed for ${normalizedEmail}`);
+  console.log(`[AUTH] Password reset completed for ${email.trim().toLowerCase()}`);
 
   res.json({
     success: true,

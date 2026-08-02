@@ -504,7 +504,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
         {messages.map((msg) => {
           const isMe = msg.senderId === currentUser.id;
           const isRead = msg.readBy && msg.readBy.length > 1;
-          const msgReactions = msg.reactions || {};
+          const msgReactions: Record<string, string[]> = msg.reactions || {};
           const reactionEntries = Object.entries(msgReactions).filter(([, ids]) => ids.length > 0);
 
           // 送信取消済みメッセージ

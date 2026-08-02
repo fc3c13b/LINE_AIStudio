@@ -6,3 +6,11 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# SQLite ランタイム生成物（データボリューム側で永続化）
+data/app.db
+data/app.db-shm
+data/app.db-wal
+data/backups/
+data/db.json.migrated
+uploads/

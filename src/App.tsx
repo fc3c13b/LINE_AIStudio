@@ -524,7 +524,7 @@ export default function App() {
       const res = await fetch(apiUrl('/api/rooms'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, memberIds, isGroup }),
+        body: JSON.stringify({ name, memberIds, isGroup, ownerId: me.id }),
       });
       const room: ChatRoom = await res.json();
       setRooms((prev) => [room, ...prev]);

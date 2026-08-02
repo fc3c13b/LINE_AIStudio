@@ -1,7 +1,7 @@
 ﻿import express from 'express';
 import path from 'path';
 import fs from 'fs';
-import { db, saveDatabase } from './db';
+import { albumsRepo } from './db';
 import { Album, AlbumMedia } from '../src/types';
 
 export const albumRouter = express.Router();
@@ -26,10 +26,7 @@ albumRouter.get('/albums', (req, res) => {
   if (!userId) {
     return res.status(400).json({ error: 'userId を指定してください。' });
   }
-  const albums = db.albums
-    .filter((a) => a.ownerId === userId)
-    .sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
-  res.json(albums);
+  res.json(albumsRepo.forOwner(userId));
 });
 
 // アルバム作成
@@ -49,14 +46,13 @@ albumRouter.post('/albums', (req, res) => {
     updatedAt: now,
   };
 
-  db.albums.unshift(album);
-  saveDatabase();
+  albumsRepo.insert(album);
   res.json(album);
 });
 
 // アルバム名変更
 albumRouter.patch('/albums/:id', (req, res) => {
-  const album = db.albums.find((a) => a.id === req.params.id);
+  const album = albumsRepo.get(req.params.id);
   if (!album) {
     return res.status(404).json({ error: 'アルバムが見つかりません。' });
   }
@@ -64,29 +60,28 @@ albumRouter.patch('/albums/:id', (req, res) => {
   if (name?.trim()) {
     album.name = name.trim();
     album.updatedAt = new Date().toISOString();
-    saveDatabase();
+    albumsRepo.save(album);
   }
   res.json(album);
 });
 
 // アルバム削除（内包メディアのアップロードファイルも削除）
 albumRouter.delete('/albums/:id', (req, res) => {
-  const index = db.albums.findIndex((a) => a.id === req.params.id);
-  if (index === -1) {
+  const album = albumsRepo.get(req.params.id);
+  if (!album) {
     return res.status(404).json({ error: 'アルバムが見つかりません。' });
   }
-  const [removed] = db.albums.splice(index, 1);
-  removed.items.forEach((item) => {
+  album.items.forEach((item) => {
     deleteUploadedFile(item.url);
     if (item.thumbUrl) deleteUploadedFile(item.thumbUrl);
   });
-  saveDatabase();
+  albumsRepo.delete(album.id);
   res.json({ success: true });
 });
 
 // アルバムへメディア追加
 albumRouter.post('/albums/:id/media', (req, res) => {
-  const album = db.albums.find((a) => a.id === req.params.id);
+  const album = albumsRepo.get(req.params.id);
   if (!album) {
     return res.status(404).json({ error: 'アルバムが見つかりません。' });
   }
@@ -97,13 +92,13 @@ albumRouter.post('/albums/:id/media', (req, res) => {
   const newItems = items.map((it, idx) => normalizeMedia(it, idx));
   album.items = [...newItems, ...album.items];
   album.updatedAt = new Date().toISOString();
-  saveDatabase();
+  albumsRepo.save(album);
   res.json(album);
 });
 
 // アルバム内メディア削除（アップロードファイルも削除）
 albumRouter.delete('/albums/:id/media/:mediaId', (req, res) => {
-  const album = db.albums.find((a) => a.id === req.params.id);
+  const album = albumsRepo.get(req.params.id);
   if (!album) {
     return res.status(404).json({ error: 'アルバムが見つかりません。' });
   }
@@ -114,7 +109,7 @@ albumRouter.delete('/albums/:id/media/:mediaId', (req, res) => {
   }
   album.items = album.items.filter((m) => m.id !== req.params.mediaId);
   album.updatedAt = new Date().toISOString();
-  saveDatabase();
+  albumsRepo.save(album);
   res.json(album);
 });
 

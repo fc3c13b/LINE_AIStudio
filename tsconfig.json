@@ -23,5 +23,5 @@
     "allowImportingTsExtensions": true,
     "noEmit": true
   },
-  "exclude": ["tmp_zip_extract", "node_modules", "dist"]
+  "exclude": ["tmp_zip_extract", "node_modules", "dist", "capacitor.config.ts"]
 }

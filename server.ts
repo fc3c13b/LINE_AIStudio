@@ -7,13 +7,10 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { GoogleGenAI } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
 import { User, ChatRoom, Message, WSMessagePayload } from './src/types';
-import { db, saveDatabase, syncRoomLastMessages, hashPassword, verifyPassword, Account, ResetToken, DEFAULT_USERS, INITIAL_ROOMS, INITIAL_MESSAGES } from './server/db';
+import { usersRepo, roomsRepo, messagesRepo, initDatabase, backupDatabase } from './server/db';
 import { authRouter } from './server/authRoutes';
 import { chatRouter } from './server/chatRoutes';
 import { albumRouter } from './server/albumRoutes';
-
-export { db, saveDatabase, syncRoomLastMessages, hashPassword, verifyPassword, DEFAULT_USERS, INITIAL_ROOMS, INITIAL_MESSAGES };
-export type { Account, ResetToken };
 
 const PORT = 3000;
 
@@ -90,11 +87,7 @@ wss.on('connection', (ws) => {
       if (payload.type === 'identify' && payload.userId) {
         // 接続とユーザーを関連付け、オンライン状態を更新・通知
         wsUserMap.set(ws, payload.userId);
-        const user = db.users.find((u) => u.id === payload.userId);
-        if (user) {
-          user.isOnline = true;
-          saveDatabase();
-        }
+        usersRepo.setOnline(payload.userId, true);
         broadcast({
           type: 'presence',
           userId: payload.userId,
@@ -104,23 +97,20 @@ wss.on('connection', (ws) => {
         ws.send(JSON.stringify({ type: 'init', onlineUsers: onlineUserIds() }));
       } else if (payload.type === 'sync' && payload.since) {
         // 再接続時の欠損メッセージ補完: since 以降のメッセージを返す
-        const sinceTime = new Date(payload.since).getTime();
-        const missed = db.messages.filter((m) => new Date(m.timestamp).getTime() > sinceTime);
+        const missed = messagesRepo.since(payload.since);
         ws.send(JSON.stringify({ type: 'sync_result', messages: missed }));
       } else if (payload.type === 'send_message' && payload.message) {
         const msg = payload.message;
-        db.messages.push(msg);
+        messagesRepo.insert(msg);
 
         // Update room
-        const room = db.rooms.find((r) => r.id === msg.roomId);
+        const room = roomsRepo.get(msg.roomId);
         if (room) {
-          room.lastMessage = msg;
-          room.updatedAt = msg.timestamp;
+          roomsRepo.setLastMessage(room.id, msg);
         }
-        saveDatabase();
 
-        // Broadcast new message to all clients
-        broadcast({
+        // ルームメンバーのみへ新着を配信 (P-04)
+        broadcastToRoom(msg.roomId, {
           type: 'new_message',
           roomId: msg.roomId,
           message: msg,
@@ -132,17 +122,17 @@ wss.on('connection', (ws) => {
         }
       } else if (payload.type === 'delete_message' && payload.messageId) {
         // 送信取消: 内容を消しフラグを立てる
-        const target = db.messages.find((m) => m.id === payload.messageId);
+        const target = messagesRepo.get(payload.messageId);
         if (target) {
           target.deleted = true;
           target.content = '';
           target.reactions = {};
-          const room = db.rooms.find((r) => r.id === target.roomId);
+          messagesRepo.update(target);
+          const room = roomsRepo.get(target.roomId);
           if (room && room.lastMessage?.id === target.id) {
-            room.lastMessage = target;
+            roomsRepo.setLastMessage(room.id, target);
           }
-          saveDatabase();
-          broadcast({
+          broadcastToRoom(target.roomId, {
             type: 'delete_message',
             roomId: target.roomId,
             messageId: target.id,
@@ -150,7 +140,7 @@ wss.on('connection', (ws) => {
         }
       } else if (payload.type === 'reaction' && payload.messageId && payload.emoji && payload.userId) {
         // 絵文字リアクションのトグル永続化
-        const target = db.messages.find((m) => m.id === payload.messageId);
+        const target = messagesRepo.get(payload.messageId);
         if (target) {
           if (!target.reactions) target.reactions = {};
           const users = target.reactions[payload.emoji] || [];
@@ -162,28 +152,21 @@ wss.on('connection', (ws) => {
           } else {
             target.reactions[payload.emoji] = [...users, payload.userId];
           }
-          saveDatabase();
-          broadcast({
+          messagesRepo.update(target);
+          broadcastToRoom(target.roomId, {
             type: 'reaction',
             roomId: target.roomId,
             messageId: target.id,
             reactions: target.reactions,
           });
         }
-      } else if (payload.type === 'typing') {
-        broadcast(payload, ws);
+      } else if (payload.type === 'typing' && payload.roomId) {
+        broadcastToRoom(payload.roomId, payload, ws);
       } else if (payload.type === 'read_messages' && payload.roomId && payload.userId) {
         const { roomId, userId } = payload;
-        let updatedCount = 0;
-        db.messages.forEach((m) => {
-          if (m.roomId === roomId && !m.readBy.includes(userId)) {
-            m.readBy.push(userId);
-            updatedCount++;
-          }
-        });
+        const updatedCount = messagesRepo.markRoomRead(roomId, userId);
         if (updatedCount > 0) {
-          saveDatabase();
-          broadcast({
+          broadcastToRoom(roomId, {
             type: 'read_messages',
             roomId,
             userId,
@@ -201,13 +184,8 @@ wss.on('connection', (ws) => {
     wsUserMap.delete(ws);
     if (userId && !isUserStillOnline(userId)) {
       // このユーザーの最後の接続が切れた: オフライン化
-      const user = db.users.find((u) => u.id === userId);
       const lastSeen = new Date().toISOString();
-      if (user) {
-        user.isOnline = false;
-        user.lastSeen = lastSeen;
-        saveDatabase();
-      }
+      usersRepo.setOnline(userId, false, lastSeen);
       broadcast({
         type: 'presence',
         userId,
@@ -223,6 +201,26 @@ export function broadcast(payload: WSMessagePayload, excludeWs?: WebSocket) {
   const dataStr = JSON.stringify(payload);
   clients.forEach((client) => {
     if (client !== excludeWs && client.readyState === WebSocket.OPEN) {
+      client.send(dataStr);
+    }
+  });
+}
+
+// P-04: 指定ルームのメンバー（および未識別接続）にのみ配信
+export function broadcastToRoom(roomId: string, payload: WSMessagePayload, excludeWs?: WebSocket) {
+  const room = roomsRepo.get(roomId);
+  // ルームが取得できない場合は全体配信にフォールバック
+  if (!room) {
+    broadcast(payload, excludeWs);
+    return;
+  }
+  const memberIds = new Set(room.members.map((m) => m.id));
+  const dataStr = JSON.stringify(payload);
+  clients.forEach((client) => {
+    if (client === excludeWs || client.readyState !== WebSocket.OPEN) return;
+    const uid = wsUserMap.get(client);
+    // 未識別の接続、またはメンバーのみに配信
+    if (!uid || memberIds.has(uid)) {
       client.send(dataStr);
     }
   });
@@ -283,12 +281,10 @@ LINEらしい自然で明るく親しみやすい口調（適度に絵文字を�
         readBy: ['user-ai', userMsg.senderId],
       };
 
-      db.messages.push(aiMsg);
-      room.lastMessage = aiMsg;
-      room.updatedAt = aiMsg.timestamp;
-      saveDatabase();
+      messagesRepo.insert(aiMsg);
+      roomsRepo.setLastMessage(room.id, aiMsg);
 
-      broadcast({
+      broadcastToRoom(room.id, {
         type: 'new_message',
         roomId: room.id,
         message: aiMsg,
@@ -307,7 +303,7 @@ LINEらしい自然で明るく親しみやすい口調（適度に絵文字を�
 
 // REST API Routes
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', onlineClients: clients.size, totalMessages: db.messages.length });
+  res.json({ status: 'ok', onlineClients: clients.size });
 });
 
 // File Upload Route (Saves photo/video files to server disk)
@@ -401,5 +397,14 @@ async function startServer() {
     console.log(`LINE App full-stack server running on http://localhost:${PORT}`);
   });
 }
+
+// SQLite 初期化（旧 JSON からの移行を含む）
+initDatabase();
+
+// D-05: 定期バックアップ（6時間ごと、最新7世代を保持）
+setInterval(() => {
+  const file = backupDatabase(7);
+  if (file) console.log(`[DB] Backup created: ${file}`);
+}, 6 * 60 * 60 * 1000);
 
 startServer();
