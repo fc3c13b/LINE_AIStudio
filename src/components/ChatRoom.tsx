@@ -342,6 +342,40 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
+  // 連続する同一送信者の画像メッセージを2列グリッド用にグループ化
+  type MsgGroup = { type: 'images'; msgs: Message[]; isMe: boolean } | { type: 'single'; msg: Message };
+  const messageGroups: MsgGroup[] = [];
+  {
+    let i = 0;
+    while (i < messages.length) {
+      const m = messages[i];
+      if (m.type === 'image' && !m.deleted) {
+        const group: Message[] = [m];
+        let j = i + 1;
+        while (
+          j < messages.length &&
+          messages[j].type === 'image' &&
+          !messages[j].deleted &&
+          messages[j].senderId === m.senderId &&
+          new Date(messages[j].timestamp).getTime() - new Date(group[group.length - 1].timestamp).getTime() < 60000
+        ) {
+          group.push(messages[j]);
+          j++;
+        }
+        if (group.length > 1) {
+          messageGroups.push({ type: 'images', msgs: group, isMe: m.senderId === currentUser.id });
+          i = j;
+        } else {
+          messageGroups.push({ type: 'single', msg: m });
+          i++;
+        }
+      } else {
+        messageGroups.push({ type: 'single', msg: m });
+        i++;
+      }
+    }
+  }
+
   return (
     <div className="flex-1 flex flex-col bg-[#7494c0] overflow-hidden relative font-sans h-full w-full min-h-0">
       {/* Official LINE Style Chat Room Header */}
@@ -489,7 +523,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
       <div
         ref={scrollContainerRef}
         onScroll={handleMessagesScroll}
-        className="flex-1 overflow-y-auto min-h-0 p-3.5 space-y-3.5"
+        className="flex-1 overflow-y-auto min-h-0 p-2 space-y-1.5"
       >
         {/* 過去メッセージ読み込みインジケーター */}
         {isLoadingOlder && (
@@ -509,7 +543,50 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
           </span>
         </div>
 
-        {messages.map((msg) => {
+        {messageGroups.map((group, gi) => {
+          // 複数画像グループ: 2列グリッドで表示
+          if (group.type === 'images') {
+            const { msgs, isMe } = group;
+            const firstMsg = msgs[0];
+            const lastMsg = msgs[msgs.length - 1];
+            const isRead = lastMsg.readBy && lastMsg.readBy.length > 1;
+            return (
+              <div key={firstMsg.id + '-grp'} className={`flex items-start gap-1.5 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                {!isMe && (
+                  <img src={firstMsg.senderAvatar} alt={firstMsg.senderName}
+                    className="w-7 h-7 rounded-full object-cover shrink-0 border border-white/20 mt-1" />
+                )}
+                <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[75%]`}>
+                  {!isMe && (
+                    <span className="text-[9px] text-white/90 font-bold mb-0.5 ml-0.5">{firstMsg.senderName}</span>
+                  )}
+                  <div className={`flex items-end gap-1 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+                    <div
+                      className={`grid gap-0.5 ${msgs.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}
+                      style={{ maxWidth: msgs.length >= 2 ? 220 : 120 }}
+                    >
+                      {msgs.map((img) => (
+                        <div
+                          key={img.id}
+                          onClick={() => openViewerForMessage(img.id)}
+                          className="overflow-hidden rounded-md border border-black/10 cursor-pointer group"
+                        >
+                          <img src={img.content} alt="画像" className="w-full h-auto object-cover max-h-28 group-hover:opacity-90 transition" />
+                        </div>
+                      ))}
+                    </div>
+                    <div className={`flex flex-col text-[9px] text-white/80 font-medium shrink-0 mb-0.5 ${isMe ? 'items-end' : 'items-start'}`}>
+                      {isMe && <span className="text-white text-[9px] leading-tight">{isRead ? '既読' : ''}</span>}
+                      <span>{formatMessageTime(lastMsg.timestamp)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          // 通常メッセージ（1件）
+          const msg = group.msg;
           const isMe = msg.senderId === currentUser.id;
           const isRead = msg.readBy && msg.readBy.length > 1;
           const msgReactions: Record<string, string[]> = msg.reactions || {};
@@ -518,17 +595,14 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
           // 送信取消済みメッセージ
           if (msg.deleted) {
             return (
-              <div key={msg.id} className={`flex items-start gap-2 ${isMe ? 'justify-end' : 'justify-start'}`}>
+              <div key={msg.id} className={`flex items-start gap-1.5 ${isMe ? 'justify-end' : 'justify-start'}`}>
                 {!isMe && (
-                  <img
-                    src={msg.senderAvatar}
-                    alt={msg.senderName}
-                    className="w-8 h-8 rounded-full object-cover bg-gray-300 shrink-0 border border-white/20 shadow-xs mt-1"
-                  />
+                  <img src={msg.senderAvatar} alt={msg.senderName}
+                    className="w-7 h-7 rounded-full object-cover shrink-0 border border-white/20 shadow-xs mt-1" />
                 )}
                 <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[80%]`}>
-                  <div className="p-3 rounded-2xl text-xs italic text-slate-500 bg-slate-100/90 border border-slate-200 flex items-center gap-1.5">
-                    <RotateCcw className="w-3.5 h-3.5" />
+                  <div className="p-2 rounded-xl text-[11px] italic text-slate-500 bg-slate-100/90 border border-slate-200 flex items-center gap-1.5">
+                    <RotateCcw className="w-3 h-3" />
                     <span>メッセージの送信を取り消しました</span>
                   </div>
                 </div>
@@ -537,27 +611,24 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
           }
 
           return (
-            <div key={msg.id} className={`flex items-start gap-2 ${isMe ? 'justify-end' : 'justify-start'}`}>
+            <div key={msg.id} className={`flex items-start gap-1.5 ${isMe ? 'justify-end' : 'justify-start'}`}>
               {!isMe && (
-                <img
-                  src={msg.senderAvatar}
-                  alt={msg.senderName}
-                  className="w-8 h-8 rounded-full object-cover bg-gray-300 shrink-0 border border-white/20 shadow-xs mt-1"
-                />
+                <img src={msg.senderAvatar} alt={msg.senderName}
+                  className="w-7 h-7 rounded-full object-cover shrink-0 border border-white/20 shadow-xs mt-1" />
               )}
 
               <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[80%]`}>
                 {!isMe && (
-                  <span className="text-[10px] text-white/90 font-bold mb-1 ml-1">
+                  <span className="text-[9px] text-white/90 font-bold mb-0.5 ml-0.5">
                     {msg.senderName}
                   </span>
                 )}
 
-                <div className={`flex items-end gap-1.5 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
-                  {/* Message Content Bubble (LINE Green `#85e249` for Me, White for Partner) */}
+                <div className={`flex items-end gap-1 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+                  {/* Message Content Bubble */}
                   <div
                     onClick={() => setSelectedMsgForMenu(selectedMsgForMenu?.id === msg.id ? null : msg)}
-                    className={`p-3 rounded-2xl text-sm shadow-xs relative break-words leading-relaxed transition cursor-pointer select-none ${
+                    className={`p-2 rounded-xl text-xs shadow-xs relative break-words leading-relaxed transition cursor-pointer select-none ${
                       isMe
                         ? 'bg-[#85e249] text-slate-950 rounded-tr-none font-normal'
                         : 'bg-white text-slate-900 rounded-tl-none border border-slate-200/90'
@@ -565,9 +636,9 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
                   >
                     {/* 引用リプライ元 */}
                     {msg.replyTo && (
-                      <div className={`mb-1.5 pl-2 border-l-2 rounded-r text-[11px] ${
+                      <div className={`mb-1 pl-2 border-l-2 rounded-r text-[10px] ${
                         isMe ? 'border-emerald-700/40 bg-black/5' : 'border-emerald-400 bg-slate-50'
-                      } py-1 pr-2`}>
+                      } py-0.5 pr-1.5`}>
                         <div className="font-bold text-emerald-700/90 leading-tight">{msg.replyTo.senderName}</div>
                         <div className="text-slate-500 line-clamp-1">{msg.replyTo.preview}</div>
                       </div>
@@ -577,92 +648,69 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
 
                     {msg.type === 'sticker' && (
                       <div className="p-0.5">
-                        <img
-                          src={msg.content}
-                          alt="スタンプ"
-                          className="w-28 h-28 object-contain rounded-lg hover:scale-105 transition"
-                        />
+                        <img src={msg.content} alt="スタンプ"
+                          className="w-20 h-20 object-contain rounded hover:scale-105 transition" />
                       </div>
                     )}
 
                     {msg.type === 'image' && (
                       <div
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openViewerForMessage(msg.id);
-                        }}
-                        className="max-w-[220px] overflow-hidden rounded-xl border border-black/10 cursor-pointer relative group transition hover:opacity-95 shadow-xs"
+                        onClick={(e) => { e.stopPropagation(); openViewerForMessage(msg.id); }}
+                        className="max-w-[160px] overflow-hidden rounded-lg border border-black/10 cursor-pointer relative group transition hover:opacity-95 shadow-xs"
                         title="タップして全画面表示"
                       >
                         <img src={msg.content} alt="送信画像" className="w-full h-auto object-cover" />
-                        <div className="absolute top-2 right-2 p-1.5 rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 transition backdrop-blur-xs">
-                          <Maximize2 className="w-3.5 h-3.5" />
+                        <div className="absolute top-1.5 right-1.5 p-1 rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 transition backdrop-blur-xs">
+                          <Maximize2 className="w-3 h-3" />
                         </div>
                       </div>
                     )}
 
                     {msg.type === 'video' && (
                       <div
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openViewerForMessage(msg.id);
-                        }}
-                        className="max-w-[240px] overflow-hidden rounded-xl border border-black/10 bg-black cursor-pointer relative group shadow-xs"
+                        onClick={(e) => { e.stopPropagation(); openViewerForMessage(msg.id); }}
+                        className="max-w-[160px] overflow-hidden rounded-lg border border-black/10 bg-black cursor-pointer relative group shadow-xs"
                         title="タップして全画面表示"
                       >
-                        <video
-                          src={msg.content}
-                          className="w-full h-auto max-h-56 rounded-xl object-cover"
-                          preload="metadata"
-                        />
+                        <video src={msg.content} className="w-full h-auto max-h-40 rounded-lg object-cover" preload="metadata" />
                         <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/10 transition">
-                          <div className="w-10 h-10 rounded-full bg-black/60 backdrop-blur-xs text-white flex items-center justify-center border border-white/30 group-hover:scale-110 transition">
-                            <Play className="w-5 h-5 ml-0.5 fill-current" />
+                          <div className="w-8 h-8 rounded-full bg-black/60 backdrop-blur-xs text-white flex items-center justify-center border border-white/30 group-hover:scale-110 transition">
+                            <Play className="w-4 h-4 ml-0.5 fill-current" />
                           </div>
-                        </div>
-                        <div className="absolute top-2 right-2 p-1.5 rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 transition backdrop-blur-xs">
-                          <Maximize2 className="w-3.5 h-3.5" />
                         </div>
                       </div>
                     )}
 
                     {msg.type === 'voice' && (
-                      <div className="flex items-center gap-2.5 py-1 min-w-[140px]">
+                      <div className="flex items-center gap-2 py-0.5 min-w-[120px]">
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setPlayingVoiceId(playingVoiceId === msg.id ? null : msg.id);
-                          }}
-                          className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition ${
+                          onClick={(e) => { e.stopPropagation(); setPlayingVoiceId(playingVoiceId === msg.id ? null : msg.id); }}
+                          className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition ${
                             isMe ? 'bg-white text-[#00c300]' : 'bg-[#00c300] text-white'
                           }`}
                         >
-                          {playingVoiceId === msg.id ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+                          {playingVoiceId === msg.id ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 ml-0.5" />}
                         </button>
                         <div>
-                          <div className="font-bold text-xs flex items-center gap-1">
-                            <Volume2 className="w-3.5 h-3.5" />
-                            <span>ボイスメッセージ</span>
+                          <div className="font-bold text-[11px] flex items-center gap-1">
+                            <Volume2 className="w-3 h-3" />
+                            <span>ボイス</span>
                           </div>
                           <div className="text-[10px] opacity-80">{msg.meta?.duration || 3}秒</div>
                         </div>
                       </div>
                     )}
 
-                    {/* Reaction Badges on Message */}
+                    {/* Reaction Badges */}
                     {reactionEntries.length > 0 && (
                       <div className="absolute -bottom-3 -right-1 flex items-center gap-0.5">
                         {reactionEntries.map(([emoji, ids]) => (
                           <button
                             key={emoji}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleAddReaction(msg.id, emoji);
-                            }}
-                            className={`bg-white border px-1.5 py-0.5 rounded-full text-xs shadow-md flex items-center gap-0.5 transition ${
+                            onClick={(e) => { e.stopPropagation(); handleAddReaction(msg.id, emoji); }}
+                            className={`bg-white border px-1 py-0.5 rounded-full text-xs shadow-md flex items-center gap-0.5 transition ${
                               ids.includes(currentUser.id) ? 'border-emerald-400' : 'border-slate-200'
                             }`}
-                            title={`${ids.length}件のリアクション`}
                           >
                             <span>{emoji}</span>
                             {ids.length > 1 && <span className="text-[9px] text-slate-500 font-bold">{ids.length}</span>}
@@ -672,10 +720,10 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
                     )}
                   </div>
 
-                  {/* Read / Timestamp Indicator (Standard LINE: Left side for own messages, Right side for partner) */}
+                  {/* Read / Timestamp */}
                   <div className={`flex flex-col text-[9px] text-white/80 font-medium shrink-0 mb-0.5 ${isMe ? 'items-end text-right' : 'items-start'}`}>
                     {isMe && (
-                      <span className="font-bold text-white text-[10px] leading-tight">
+                      <span className="font-bold text-white text-[9px] leading-tight">
                         {isRead ? '既読' : ''}
                       </span>
                     )}
@@ -925,7 +973,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
       {/* Official LINE Style Bottom Input Form Bar */}
       <form
         onSubmit={handleSendText}
-        className="bg-white px-2.5 py-2 border-t border-slate-200 flex items-center gap-1.5 z-30 shrink-0 shadow-lg"
+        className="bg-white px-2 py-1.5 border-t border-slate-200 flex items-center gap-1.5 z-30 shrink-0 shadow-lg"
       >
         {/* 1. Plus Button (+) */}
         <button
