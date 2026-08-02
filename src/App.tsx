@@ -591,6 +591,26 @@ export default function App() {
     }
   };
 
+  // アルバム・音楽からチャットへのシステム通知
+  const handleSendSystemToRoom = (roomId: string, text: string) => {
+    const newMsg = {
+      id: `msg-sys-${Date.now()}`,
+      roomId,
+      senderId: me.id,
+      senderName: me.name,
+      senderAvatar: me.avatar,
+      type: 'system' as const,
+      content: text,
+      timestamp: new Date().toISOString(),
+      readBy: [me.id],
+    };
+    setRoomMessages((prev) => ({
+      ...prev,
+      [roomId]: [...(prev[roomId] || []), newMsg],
+    }));
+    wsService.send({ type: 'send_message', message: newMsg });
+  };
+
   // Start Call
   const handleStartCall = (type: 'voice' | 'video') => {
     const currentRoom = rooms.find((r) => r.id === activeRoomId);
@@ -677,6 +697,7 @@ export default function App() {
               currentUser={me}
               onOpenChat={handleOpenChat}
               onOpenNewChatModal={() => setIsNewChatModalOpen(true)}
+              onGoHome={() => setActiveTab('home')}
             />
           )}
 
@@ -685,12 +706,18 @@ export default function App() {
               userId={account ? me.id : null}
               isLoggedIn={!!account}
               onOpenAuthModal={() => setAuthModalState({ isOpen: true, mode: 'login' })}
+              onGoHome={() => setActiveTab('home')}
+              rooms={rooms}
+              onSendToChat={handleSendSystemToRoom}
             />
           )}
 
           {activeTab === 'music' && (
             <MusicTab
               isLoggedIn={!!account}
+              onGoHome={() => setActiveTab('home')}
+              rooms={rooms}
+              onSendToChat={handleSendSystemToRoom}
             />
           )}
 
@@ -710,6 +737,7 @@ export default function App() {
               onLogout={handleLogout}
               onLockApp={() => setIsAppLocked(true)}
               isConnected={isConnected}
+              onGoHome={() => setActiveTab('home')}
             />
           )}
 

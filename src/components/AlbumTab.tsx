@@ -79,9 +79,12 @@ interface AlbumTabProps {
   onOpenAuthModal?: () => void;
   isLoggedIn?: boolean;
   userId?: string | null;
+  onGoHome?: () => void;
+  rooms?: import('../types').ChatRoom[];
+  onSendToChat?: (roomId: string, text: string) => void;
 }
 
-export const AlbumTab: React.FC<AlbumTabProps> = ({ onOpenAuthModal, isLoggedIn = false, userId = null }) => {
+export const AlbumTab: React.FC<AlbumTabProps> = ({ onOpenAuthModal, isLoggedIn = false, userId = null, onGoHome, rooms = [], onSendToChat }) => {
   const [albums, setAlbums] = useState<Album[]>([]);
   const [isLoadingAlbums, setIsLoadingAlbums] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -108,6 +111,11 @@ export const AlbumTab: React.FC<AlbumTabProps> = ({ onOpenAuthModal, isLoggedIn 
   const [menuAlbumId, setMenuAlbumId] = useState<string | null>(null);
   const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
   const [renameInputValue, setRenameInputValue] = useState('');
+
+  // コメント編集・シェア状態
+  const [editingCommentMediaId, setEditingCommentMediaId] = useState<string | null>(null);
+  const [commentDraft, setCommentDraft] = useState('');
+  const [shareModalOpen, setShareModalOpen] = useState<{ text: string } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -349,7 +357,26 @@ export const AlbumTab: React.FC<AlbumTabProps> = ({ onOpenAuthModal, isLoggedIn 
     setSelectedMediaIndex(null);
   };
 
-  // Lightbox の前後移動
+  // 写真コメントを保存してチャットに通知
+  const handleSaveComment = async (albumId: string, mediaId: string) => {
+    try {
+      const res = await fetch(apiUrl(`/api/albums/${albumId}/media/${mediaId}/comment`), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ comment: commentDraft }),
+      });
+      if (res.ok) {
+        const updated: Album = await res.json();
+        upsertAlbum(updated);
+        setEditingCommentMediaId(null);
+        if (commentDraft.trim() && rooms.length > 0) {
+          setShareModalOpen({ text: `📷 アルバムに写真コメントを追加しました：「${commentDraft.trim()}」` });
+        }
+      }
+    } catch (err) {
+      console.error('Failed to save comment:', err);
+    }
+  };
   const goToPrevMedia = () => {
     setSelectedMediaIndex((idx) => (idx !== null && idx > 0 ? idx - 1 : idx));
     setDragOffsetX(0);
@@ -453,10 +480,15 @@ export const AlbumTab: React.FC<AlbumTabProps> = ({ onOpenAuthModal, isLoggedIn 
       {!activeAlbumId ? (
         <div className="flex-1 flex flex-col overflow-y-auto">
           {/* Header */}
-          <div className="px-4 py-3.5 bg-white border-b border-slate-200 sticky top-0 z-20 flex items-center justify-between shadow-2xs">
-            <div>
+          <div className="px-3 py-3 bg-white border-b border-slate-200 sticky top-0 z-20 flex items-center gap-2 shadow-2xs">
+            {onGoHome && (
+              <button onClick={onGoHome} className="p-1 hover:bg-slate-100 rounded-full text-slate-600 transition">
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+            )}
+            <div className="flex-1">
               <h1 className="text-lg font-bold text-slate-900 tracking-tight leading-none">アルバム</h1>
-              <p className="text-[11px] text-slate-500 font-medium mt-1">
+              <p className="text-[11px] text-slate-500 font-medium mt-0.5">
                 {albums.length}個のアルバム
               </p>
             </div>
@@ -470,23 +502,29 @@ export const AlbumTab: React.FC<AlbumTabProps> = ({ onOpenAuthModal, isLoggedIn 
             </button>
           </div>
 
-          {/* Albums Cards Grid */}
-          <div className="p-2 sm:p-3 flex-1 w-full">
+          {/* Albums Cards — 1列フル幅表示 */}
+          <div className="p-2 sm:p-3 flex-1 w-full overflow-y-auto">
             {isLoadingAlbums && albums.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-slate-400 gap-2">
                 <Loader2 className="w-6 h-6 animate-spin" />
                 <span className="text-xs font-medium">アルバムを読み込み中...</span>
               </div>
             ) : albums.length > 0 ? (
-              <div className="grid grid-cols-2 gap-2 w-full">
-                {albums.map((album) => (
+              <div className="flex flex-col gap-3 w-full">
+                {albums.map((album) => {
+                  const count = album.items?.length || 0;
+                  // 画像数が少ない(≤2)ときは半幅、多い場合はフル幅
+                  const isNarrow = count <= 2;
+                  return (
                   <div
                     key={album.id}
                     onClick={() => setActiveAlbumId(album.id)}
-                    className="group bg-white rounded-xl border border-slate-200/90 overflow-hidden shadow-xs hover:shadow-md transition cursor-pointer flex flex-col relative w-full"
+                    className={`group bg-white rounded-xl overflow-hidden shadow-xs hover:shadow-md transition cursor-pointer relative ${
+                      isNarrow ? 'max-w-[50%]' : 'w-full'
+                    }`}
                   >
-                    {/* Cover Collage Thumbnail */}
-                    <div className="aspect-square bg-slate-100 overflow-hidden relative border-b border-slate-100">
+                    {/* Cover Collage Thumbnail — 横幅と同じ高さの正方形 */}
+                    <div className="aspect-square bg-slate-100 overflow-hidden relative">
                       {renderAlbumCover(album.items)}
 
                       {/* Photo Count Badge */}
@@ -545,7 +583,8 @@ export const AlbumTab: React.FC<AlbumTabProps> = ({ onOpenAuthModal, isLoggedIn 
                       </div>
                     )}
                   </div>
-                ))}
+                );
+              })}
               </div>
             ) : (
               <div className="bg-white rounded-2xl border border-slate-200/90 p-8 text-center space-y-2 my-6">
@@ -593,36 +632,60 @@ export const AlbumTab: React.FC<AlbumTabProps> = ({ onOpenAuthModal, isLoggedIn 
               </div>
             </div>
 
-            {/* 3-Column Photo Grid */}
+            {/* 3-Column Photo Grid with comments */}
             <div className="p-0 flex-1 w-full">
               {activeAlbum.items && activeAlbum.items.length > 0 ? (
                 <div className="grid grid-cols-3 gap-0.5 w-full">
                   {activeAlbum.items.map((item, idx) => (
-                    <div
-                      key={item.id}
-                      onClick={() => setSelectedMediaIndex(idx)}
-                      className="group relative aspect-square bg-slate-900 overflow-hidden cursor-pointer rounded-none transition hover:opacity-95 w-full"
-                    >
-                      {item.type === 'video' ? (
-                        <div className="w-full h-full relative bg-black flex items-center justify-center">
-                          <video src={item.url} className="w-full h-full object-cover" />
-                          <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                            <div className="w-8 h-8 rounded-full bg-black/60 text-white flex items-center justify-center">
-                              <Play className="w-4 h-4 ml-0.5 fill-current" />
+                    <div key={item.id} className="flex flex-col">
+                      <div
+                        onClick={() => setSelectedMediaIndex(idx)}
+                        className="group relative aspect-square bg-slate-900 overflow-hidden cursor-pointer rounded-none transition hover:opacity-95 w-full"
+                      >
+                        {item.type === 'video' ? (
+                          <div className="w-full h-full relative bg-black flex items-center justify-center">
+                            <video src={item.url} className="w-full h-full object-cover" />
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                              <div className="w-8 h-8 rounded-full bg-black/60 text-white flex items-center justify-center">
+                                <Play className="w-4 h-4 ml-0.5 fill-current" />
+                              </div>
                             </div>
                           </div>
+                        ) : (
+                          <img src={item.url} alt={item.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition duration-200" />
+                        )}
+                        {item.comment && (
+                          <div className="absolute bottom-0 inset-x-0 bg-black/60 px-1.5 py-0.5">
+                            <p className="text-white text-[9px] truncate">{item.comment}</p>
+                          </div>
+                        )}
+                      </div>
+                      {/* コメント編集 */}
+                      {editingCommentMediaId === item.id ? (
+                        <div className="bg-white border-t border-slate-100 p-1.5 flex gap-1">
+                          <input
+                            type="text"
+                            value={commentDraft}
+                            onChange={(e) => setCommentDraft(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleSaveComment(activeAlbum.id, item.id)}
+                            placeholder="コメントを入力..."
+                            className="flex-1 text-[11px] border border-slate-200 rounded px-1.5 py-0.5 focus:outline-none focus:border-emerald-400"
+                            autoFocus
+                          />
+                          <button onClick={() => handleSaveComment(activeAlbum.id, item.id)}
+                            className="px-2 py-0.5 bg-emerald-500 text-white text-[10px] font-bold rounded transition">保存</button>
+                          <button onClick={() => setEditingCommentMediaId(null)}
+                            className="px-1.5 py-0.5 bg-slate-100 text-slate-600 text-[10px] rounded transition">×</button>
                         </div>
                       ) : (
-                        <img
-                          src={item.url}
-                          alt={item.title}
-                          className="w-full h-full object-cover group-hover:scale-105 transition duration-200"
-                        />
+                        <button
+                          onClick={() => { setEditingCommentMediaId(item.id); setCommentDraft(item.comment || ''); }}
+                          className="w-full text-left text-[10px] px-1.5 py-0.5 text-slate-400 hover:text-emerald-600 bg-white border-t border-slate-100 truncate"
+                        >
+                          {item.comment ? item.comment : '＋ コメント'}
+                        </button>
                       )}
-
-                      <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition flex items-end p-1.5 text-white">
-                        <span className="text-[10px] font-medium truncate">{item.title}</span>
-                      </div>
                     </div>
                   ))}
                 </div>
@@ -945,11 +1008,40 @@ export const AlbumTab: React.FC<AlbumTabProps> = ({ onOpenAuthModal, isLoggedIn 
             )}
           </div>
 
-          {/* Bottom Title Bar */}
+          {/* Bottom Title Bar with comment */}
           <div className="p-4 bg-gradient-to-t from-black/90 to-transparent text-center text-white z-20">
             <p className="text-xs font-bold">
               {activeAlbum.items[selectedMediaIndex].title || activeAlbum.name}
             </p>
+            {activeAlbum.items[selectedMediaIndex].comment && (
+              <p className="text-[11px] text-white/80 mt-1 italic">
+                💬 {activeAlbum.items[selectedMediaIndex].comment}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* チャットへのシェアモーダル */}
+      {shareModalOpen && rooms.length > 0 && onSendToChat && (
+        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl p-5 w-full max-w-xs shadow-2xl space-y-3">
+            <h3 className="font-bold text-sm text-slate-900">チャットに通知しますか？</h3>
+            <p className="text-xs text-slate-500 line-clamp-2">{shareModalOpen.text}</p>
+            <div className="space-y-1.5 max-h-40 overflow-y-auto">
+              {rooms.map((r) => (
+                <button
+                  key={r.id}
+                  onClick={() => { onSendToChat(r.id, shareModalOpen.text); setShareModalOpen(null); }}
+                  className="w-full p-2.5 flex items-center gap-2.5 hover:bg-slate-50 rounded-xl transition text-left"
+                >
+                  <img src={r.avatar} alt={r.name} className="w-8 h-8 rounded-full object-cover" />
+                  <span className="text-xs font-bold text-slate-800 truncate">{r.name}</span>
+                </button>
+              ))}
+            </div>
+            <button onClick={() => setShareModalOpen(null)}
+              className="w-full py-2 text-xs text-slate-500 hover:text-slate-700 transition">スキップ</button>
           </div>
         </div>
       )}

@@ -12,6 +12,7 @@ import {
   Trash2,
   AlertTriangle,
   MessageSquare,
+  ChevronLeft,
 } from 'lucide-react';
 import { apiUrl } from '../services/api';
 
@@ -42,6 +43,7 @@ interface SettingsTabProps {
   onLogout: () => void;
   onLockApp?: () => void;
   isConnected: boolean;
+  onGoHome?: () => void;
 }
 
 export const SettingsTab: React.FC<SettingsTabProps> = ({
@@ -57,6 +59,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
   onLogout,
   onLockApp,
   isConnected,
+  onGoHome,
 }) => {
   const [name, setName] = useState(currentUser.name);
   const [statusMessage, setStatusMessage] = useState(currentUser.statusMessage || '');
@@ -112,7 +115,12 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
   return (
     <div className="flex-1 flex flex-col bg-slate-50 overflow-y-auto">
       {/* Top Header */}
-      <div className="px-4 py-3 bg-white border-b border-slate-200/80 sticky top-0 z-10">
+      <div className="px-3 py-3 bg-white border-b border-slate-200/80 sticky top-0 z-10 flex items-center gap-2">
+        {onGoHome && (
+          <button onClick={onGoHome} className="p-1 hover:bg-slate-100 rounded-full text-slate-600 transition">
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+        )}
         <h1 className="text-xl font-bold text-slate-900 tracking-tight">設定・プロフィール</h1>
       </div>
 

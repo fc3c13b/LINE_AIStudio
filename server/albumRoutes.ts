@@ -96,6 +96,17 @@ albumRouter.post('/albums/:id/media', (req, res) => {
   res.json(album);
 });
 
+// メディアのコメント更新
+albumRouter.patch('/albums/:id/media/:mediaId/comment', (req, res) => {
+  const album = albumsRepo.get(req.params.id);
+  if (!album) return res.status(404).json({ error: 'アルバムが見つかりません。' });
+  const media = album.items.find((m) => m.id === req.params.mediaId);
+  if (!media) return res.status(404).json({ error: 'メディアが見つかりません。' });
+  media.comment = typeof req.body.comment === 'string' ? req.body.comment : '';
+  albumsRepo.save(album);
+  res.json(album);
+});
+
 // アルバム内メディア削除（アップロードファイルも削除）
 albumRouter.delete('/albums/:id/media/:mediaId', (req, res) => {
   const album = albumsRepo.get(req.params.id);

@@ -18,7 +18,8 @@ import {
   Disc,
   ListMusic,
   Radio,
-  FileAudio
+  FileAudio,
+  ChevronLeft,
 } from 'lucide-react';
 
 // Sample initial music tracks (empty by default)
@@ -26,9 +27,12 @@ const INITIAL_MUSIC_LIST: MusicItem[] = [];
 
 interface MusicTabProps {
   isLoggedIn?: boolean;
+  onGoHome?: () => void;
+  rooms?: import('../types').ChatRoom[];
+  onSendToChat?: (roomId: string, text: string) => void;
 }
 
-export const MusicTab: React.FC<MusicTabProps> = () => {
+export const MusicTab: React.FC<MusicTabProps> = ({ onGoHome, rooms = [], onSendToChat }) => {
   // Saved music state from localStorage or initial empty list
   const [musicList, setMusicList] = useState<MusicItem[]>(() => {
     try {
@@ -350,36 +354,34 @@ export const MusicTab: React.FC<MusicTabProps> = () => {
       />
 
       {/* Header */}
-      <header className="bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between sticky top-0 z-20 shadow-sm">
-        <div className="flex items-center gap-2">
-          <div className="w-9 h-9 rounded-full bg-emerald-500/10 text-[#00c300] flex items-center justify-center font-bold">
-            <Music className="w-5 h-5" />
-          </div>
-          <div>
-            <h1 className="font-bold text-slate-800 text-base leading-tight">音楽ライブラリ</h1>
-            <p className="text-[11px] text-slate-500">MP3 / MP4 / M4A / FLAC の連続再生</p>
-          </div>
-        </div>
-
-        {/* Upload Button */}
-        <div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="audio/*,video/mp4,.mp3,.mp4,.m4a,.flac"
-            multiple
-            onChange={handleFileUpload}
-            className="hidden"
-          />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isUploading}
-            className="bg-[#00c300] hover:bg-[#00b300] active:scale-95 text-white text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-sm transition"
-          >
-            <Plus className="w-4 h-4" />
-            <span>音楽を追加</span>
+      <header className="bg-white border-b border-slate-200 px-3 py-3 flex items-center gap-2 sticky top-0 z-20 shadow-sm">
+        {onGoHome && (
+          <button onClick={onGoHome} className="p-1 hover:bg-slate-100 rounded-full text-slate-600 transition">
+            <ChevronLeft className="w-5 h-5" />
           </button>
+        )}
+        <div className="flex-1 flex items-center gap-2">
+          <div className="w-8 h-8 rounded-full bg-emerald-500/10 text-[#00c300] flex items-center justify-center">
+            <Music className="w-4 h-4" />
+          </div>
+          <h1 className="font-bold text-slate-800 text-base leading-tight">音楽ライブラリ</h1>
         </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="audio/*,video/mp4,.mp3,.mp4,.m4a,.flac"
+          multiple
+          onChange={handleFileUpload}
+          className="hidden"
+        />
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isUploading}
+          className="bg-[#00c300] hover:bg-[#00b300] active:scale-95 text-white text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-sm transition"
+        >
+          <Plus className="w-4 h-4" />
+          <span>音楽を追加</span>
+        </button>
       </header>
 
       {/* Continuous Playback Banner & Controls */}
@@ -493,6 +495,23 @@ export const MusicTab: React.FC<MusicTabProps> = () => {
                       <p className="text-[11px] text-slate-500 truncate mt-0.5">
                         {track.artist} {track.album ? `• ${track.album}` : ''}
                       </p>
+                      {/* コメント表示・編集 */}
+                      <input
+                        type="text"
+                        value={track.comment ?? ''}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setMusicList((prev) => prev.map((t) => t.id === track.id ? { ...t, comment: val } : t));
+                        }}
+                        onBlur={() => {
+                          const saved = JSON.parse(localStorage.getItem('line_app_music_list') || '[]');
+                          const updated = saved.map((t: MusicItem) => t.id === track.id ? { ...t, comment: track.comment } : t);
+                          localStorage.setItem('line_app_music_list', JSON.stringify(updated));
+                        }}
+                        placeholder="＋ コメント"
+                        className="w-full text-[10px] text-slate-400 placeholder-slate-300 bg-transparent border-none focus:outline-none focus:text-slate-600 mt-0.5 truncate"
+                      />
                     </div>
                   )}
                 </div>

@@ -81,6 +81,7 @@ export interface AlbumMedia {
   url: string;
   thumbUrl?: string;
   title: string;
+  comment?: string;
   createdAt: string;
 }
 
@@ -103,6 +104,7 @@ export interface MusicItem {
   coverUrl?: string;
   format: string; // 'mp3' | 'mp4' | 'm4a' | 'flac' | string
   fileSize?: string;
+  comment?: string;
   createdAt: string;
 }
 

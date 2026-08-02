@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { ChatRoom, User } from '../types';
-import { Search, Pin, MessageSquarePlus, Sparkles, ShieldCheck } from 'lucide-react';
+import { Search, Pin, MessageSquarePlus, Sparkles, ShieldCheck, ChevronLeft } from 'lucide-react';
 
 interface ChatsTabProps {
   rooms: ChatRoom[];
   currentUser: User;
   onOpenChat: (roomId: string) => void;
   onOpenNewChatModal: () => void;
+  onGoHome?: () => void;
 }
 
 export const ChatsTab: React.FC<ChatsTabProps> = ({
@@ -14,6 +15,7 @@ export const ChatsTab: React.FC<ChatsTabProps> = ({
   currentUser,
   onOpenChat,
   onOpenNewChatModal,
+  onGoHome,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -56,10 +58,13 @@ export const ChatsTab: React.FC<ChatsTabProps> = ({
   return (
     <div className="flex-1 flex flex-col bg-white overflow-hidden">
       {/* Top Header */}
-      <div className="px-4 py-3 border-b border-slate-200/80 flex items-center justify-between bg-white z-10">
-        <div className="flex items-baseline gap-2">
-          <h1 className="text-xl font-bold text-slate-900 tracking-tight">トーク</h1>
-        </div>
+      <div className="px-3 py-3 border-b border-slate-200/80 flex items-center gap-2 bg-white z-10">
+        {onGoHome && (
+          <button onClick={onGoHome} className="p-1 hover:bg-slate-100 rounded-full text-slate-600 transition">
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+        )}
+        <h1 className="text-xl font-bold text-slate-900 tracking-tight">トーク</h1>
       </div>
 
       {/* Search Input */}
