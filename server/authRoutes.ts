@@ -79,7 +79,7 @@ authRouter.post('/register', (req, res) => {
 
   res.json({
     user: newUser,
-    account: { id: newAccount.id, name: newAccount.name },
+    account: { id: newAccount.id, name: newAccount.name, isAdmin: false },
   });
 });
 
@@ -111,6 +111,9 @@ authRouter.post('/login', (req, res) => {
     };
     usersRepo.upsert(user);
   } else {
+    if (user.isSuspended) {
+      return res.status(403).json({ error: 'このアカウントは利用停止中です。管理者にお問い合わせください。' });
+    }
     user.isOnline = true;
     if (!user.friendIds) user.friendIds = [];
     usersRepo.upsert(user);
@@ -120,7 +123,7 @@ authRouter.post('/login', (req, res) => {
 
   res.json({
     user,
-    account: { id: account.id, name: account.name },
+    account: { id: account.id, name: account.name, isAdmin: !!(account as any).isAdmin },
   });
 });
 

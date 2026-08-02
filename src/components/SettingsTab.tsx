@@ -1,18 +1,24 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User } from '../types';
 import {
   UserCheck,
   RefreshCw,
   ShieldCheck,
   LogOut,
-  KeyRound,
   Lock,
+  Shield,
+  UserX,
+  UserCheck2,
+  Trash2,
+  AlertTriangle,
 } from 'lucide-react';
+import { apiUrl } from '../services/api';
 
 interface SettingsTabProps {
   currentUser: User;
   accountEmail?: string;
   isLoggedIn?: boolean;
+  isAdmin?: boolean;
   onUpdateProfile: (name: string, statusMessage: string, avatar: string) => void;
   onResetDatabase: () => void;
   onOpenAuthModal: (mode?: 'login' | 'register' | 'forgot') => void;
@@ -25,6 +31,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
   currentUser,
   accountEmail,
   isLoggedIn = false,
+  isAdmin = false,
   onUpdateProfile,
   onResetDatabase,
   onOpenAuthModal,
@@ -36,6 +43,45 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
   const [statusMessage, setStatusMessage] = useState(currentUser.statusMessage || '');
   const [avatar, setAvatar] = useState(currentUser.avatar);
   const [savedSuccess, setSavedSuccess] = useState(false);
+
+  // 管理者パネル用
+  const [adminUsers, setAdminUsers] = useState<(User & { isAdmin?: boolean })[]>([]);
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
+
+  useEffect(() => {
+    if (isAdmin) loadAdminUsers();
+  }, [isAdmin]);
+
+  const loadAdminUsers = async () => {
+    setAdminLoading(true);
+    try {
+      const res = await fetch(apiUrl(`/api/admin/users?adminId=${encodeURIComponent(currentUser.id)}`));
+      if (res.ok) setAdminUsers(await res.json());
+    } catch { /* noop */ }
+    finally { setAdminLoading(false); }
+  };
+
+  const adminAction = async (action: 'suspend' | 'unsuspend', userId: string) => {
+    const method = 'POST';
+    const url = apiUrl(`/api/admin/users/${userId}/${action}`);
+    await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ adminId: currentUser.id }),
+    });
+    loadAdminUsers();
+  };
+
+  const adminDelete = async (userId: string, userName: string) => {
+    if (!confirm(`「${userName}」のアカウントを完全に削除しますか？\nこの操作は取り消せません。`)) return;
+    await fetch(apiUrl(`/api/admin/users/${userId}?adminId=${encodeURIComponent(currentUser.id)}`), {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ adminId: currentUser.id }),
+    });
+    loadAdminUsers();
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,19 +98,17 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
       </div>
 
       <div className="p-4 space-y-5">
-        {/* Account Card — ログイン時のみアカウント情報を表示 */}
+        {/* Account Card */}
         {isLoggedIn && (
           <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
             <h2 className="font-bold text-sm text-slate-900 flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-emerald-500" />
               <span>アカウント</span>
+              {isAdmin && <span className="ml-auto text-[10px] bg-amber-100 text-amber-700 font-bold px-2 py-0.5 rounded-full border border-amber-200">管理者</span>}
             </h2>
 
-            <div className="p-3 bg-emerald-50 border border-emerald-200/80 rounded-xl text-xs flex items-center justify-between">
-              <div>
-                <p className="font-semibold text-emerald-900">ログイン中</p>
-                <p className="text-emerald-700 font-mono mt-0.5">{currentUser.name}</p>
-              </div>
+            <div className="p-3 bg-emerald-50 border border-emerald-200/80 rounded-xl text-xs">
+              <p className="font-semibold text-emerald-900">ログイン中: {currentUser.name}</p>
             </div>
 
             <div className="flex gap-2">
@@ -145,22 +189,101 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
           </form>
         </div>
 
-        {/* Database Management */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
-          <h2 className="font-bold text-sm text-slate-900 flex items-center gap-2">
-            <RefreshCw className="w-4 h-4 text-slate-600" />
-            <span>データリセット</span>
-          </h2>
-          <p className="text-xs text-slate-500">
-            初期状態の友達リスト・トーク履歴データにリセットします。
-          </p>
-          <button
-            onClick={onResetDatabase}
-            className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition border border-slate-200"
-          >
-            初期シードデータに戻す
-          </button>
-        </div>
+        {/* 管理者パネル — administrator のみ表示 */}
+        {isAdmin && (
+          <div className="bg-white rounded-2xl border border-amber-200 shadow-sm overflow-hidden">
+            <div className="px-4 py-3 bg-amber-50 border-b border-amber-200 flex items-center justify-between">
+              <h2 className="font-bold text-sm text-amber-900 flex items-center gap-2">
+                <Shield className="w-4 h-4 text-amber-600" />
+                <span>管理者パネル</span>
+              </h2>
+              <button onClick={loadAdminUsers} className="text-[10px] text-amber-600 hover:underline font-bold">更新</button>
+            </div>
+
+            {/* ユーザー管理リスト */}
+            <div className="divide-y divide-slate-100">
+              {adminLoading ? (
+                <div className="p-4 text-center text-xs text-slate-400">読み込み中...</div>
+              ) : adminUsers.length === 0 ? (
+                <div className="p-4 text-center text-xs text-slate-400">登録ユーザーがいません</div>
+              ) : (
+                adminUsers.map((u) => (
+                  <div key={u.id} className="p-3 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <img src={u.avatar} alt={u.name} className="w-9 h-9 rounded-full object-cover border border-slate-200 shrink-0" />
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-bold text-slate-900 truncate">{u.name}</span>
+                          {u.isSuspended && (
+                            <span className="text-[9px] bg-red-100 text-red-600 font-bold px-1.5 py-0.5 rounded-full border border-red-200">停止中</span>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-slate-400 truncate block">{u.id}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {u.isSuspended ? (
+                        <button
+                          onClick={() => adminAction('unsuspend', u.id)}
+                          className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-lg transition"
+                          title="利用停止を解除"
+                        >
+                          <UserCheck2 className="w-3.5 h-3.5" />
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => adminAction('suspend', u.id)}
+                          className="p-1.5 bg-amber-50 hover:bg-amber-100 text-amber-600 rounded-lg transition"
+                          title="利用停止"
+                        >
+                          <UserX className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => adminDelete(u.id, u.name)}
+                        className="p-1.5 bg-red-50 hover:bg-red-100 text-red-500 rounded-lg transition"
+                        title="アカウント削除"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* データリセット（管理者専用） */}
+            <div className="p-4 border-t border-amber-100 space-y-2">
+              <h3 className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 text-red-500" />
+                <span>全データリセット（危険）</span>
+              </h3>
+              {!confirmReset ? (
+                <button
+                  onClick={() => setConfirmReset(true)}
+                  className="w-full py-2 bg-slate-100 hover:bg-red-50 hover:text-red-600 text-slate-600 font-bold text-xs rounded-xl transition border border-slate-200"
+                >
+                  初期シードデータに戻す
+                </button>
+              ) : (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setConfirmReset(false)}
+                    className="flex-1 py-2 bg-slate-100 text-slate-600 font-bold text-xs rounded-xl"
+                  >
+                    キャンセル
+                  </button>
+                  <button
+                    onClick={() => { onResetDatabase(); setConfirmReset(false); }}
+                    className="flex-1 py-2 bg-red-500 hover:bg-red-600 text-white font-bold text-xs rounded-xl"
+                  >
+                    実行する
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

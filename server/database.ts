@@ -18,6 +18,7 @@ export interface Account {
   passwordHash: string;
   salt: string;
   createdAt: string;
+  isAdmin?: number; // 1 = admin
 }
 
 export interface ResetToken {
@@ -52,7 +53,8 @@ sqlite.exec(`
     isOfficial INTEGER DEFAULT 0,
     isOnline INTEGER DEFAULT 0,
     lastSeen TEXT,
-    friendIds TEXT DEFAULT '[]'
+    friendIds TEXT DEFAULT '[]',
+    isSuspended INTEGER DEFAULT 0
   );
   CREATE TABLE IF NOT EXISTS accounts (
     id TEXT PRIMARY KEY,
@@ -60,7 +62,8 @@ sqlite.exec(`
     email TEXT,
     passwordHash TEXT NOT NULL,
     salt TEXT NOT NULL,
-    createdAt TEXT
+    createdAt TEXT,
+    isAdmin INTEGER DEFAULT 0
   );
   CREATE TABLE IF NOT EXISTS rooms (
     id TEXT PRIMARY KEY,
@@ -145,6 +148,7 @@ function rowToUser(r: any): User {
     isOnline: !!r.isOnline,
     lastSeen: r.lastSeen || undefined,
     friendIds: parseJson<string[]>(r.friendIds, []),
+    isSuspended: !!r.isSuspended,
   };
 }
 
@@ -193,8 +197,8 @@ function rowToAlbum(r: any): Album {
 
 // ---- Users ----
 const stmtInsertUser = sqlite.prepare(
-  `INSERT OR REPLACE INTO users (id, name, avatar, statusMessage, isOfficial, isOnline, lastSeen, friendIds)
-   VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  `INSERT OR REPLACE INTO users (id, name, avatar, statusMessage, isOfficial, isOnline, lastSeen, friendIds, isSuspended)
+   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
 );
 
 export const usersRepo = {
@@ -214,8 +218,15 @@ export const usersRepo = {
       u.isOfficial ? 1 : 0,
       u.isOnline ? 1 : 0,
       u.lastSeen ?? null,
-      JSON.stringify(u.friendIds || [])
+      JSON.stringify(u.friendIds || []),
+      u.isSuspended ? 1 : 0
     );
+  },
+  setSuspended(id: string, suspended: boolean): void {
+    sqlite.prepare('UPDATE users SET isSuspended = ? WHERE id = ?').run(suspended ? 1 : 0, id);
+  },
+  delete(id: string): void {
+    sqlite.prepare('DELETE FROM users WHERE id = ?').run(id);
   },
   setOnline(id: string, isOnline: boolean, lastSeen?: string): void {
     sqlite.prepare('UPDATE users SET isOnline = ?, lastSeen = COALESCE(?, lastSeen) WHERE id = ?')
@@ -240,11 +251,18 @@ export const accountsRepo = {
   },
   insert(a: Account): void {
     sqlite.prepare(
-      `INSERT INTO accounts (id, name, email, passwordHash, salt, createdAt) VALUES (?, ?, ?, ?, ?, ?)`
-    ).run(a.id, a.name, a.email, a.passwordHash, a.salt, a.createdAt);
+      `INSERT INTO accounts (id, name, email, passwordHash, salt, createdAt, isAdmin) VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).run(a.id, a.name, a.email, a.passwordHash, a.salt, a.createdAt, a.isAdmin ?? 0);
   },
   updatePassword(id: string, passwordHash: string, salt: string): void {
     sqlite.prepare('UPDATE accounts SET passwordHash = ?, salt = ? WHERE id = ?').run(passwordHash, salt, id);
+  },
+  delete(id: string): void {
+    sqlite.prepare('DELETE FROM accounts WHERE id = ?').run(id);
+  },
+  isAdmin(id: string): boolean {
+    const r = sqlite.prepare('SELECT isAdmin FROM accounts WHERE id = ?').get(id) as any;
+    return r?.isAdmin === 1;
   },
 };
 
@@ -500,6 +518,45 @@ export function migrateFromJsonIfNeeded(): void {
   }
 
   sqlite.prepare(`INSERT OR REPLACE INTO meta (key, value) VALUES ('json_migrated', ?)`).run(new Date().toISOString());
+}
+
+// ---- 管理者アカウントの初期化（起動時に毎回確認）----
+const ADMIN_NAME = 'administrator';
+const ADMIN_PASS = 'Adm1n1strat0r';
+
+export function initAdminAccount(): void {
+  // ALTER TABLE で isAdmin/isSuspended 列を追加（既存DBへの後方互換）
+  try { sqlite.exec(`ALTER TABLE accounts ADD COLUMN isAdmin INTEGER DEFAULT 0`); } catch { /* already exists */ }
+  try { sqlite.exec(`ALTER TABLE users ADD COLUMN isSuspended INTEGER DEFAULT 0`); } catch { /* already exists */ }
+
+  const existing = accountsRepo.getByName(ADMIN_NAME);
+  if (!existing) {
+    const { hash, salt } = hashPassword(ADMIN_PASS);
+    const adminAccount: Account = {
+      id: 'user-admin',
+      name: ADMIN_NAME,
+      email: '',
+      passwordHash: hash,
+      salt,
+      createdAt: new Date().toISOString(),
+      isAdmin: 1,
+    };
+    const adminUser: User = {
+      id: 'user-admin',
+      name: ADMIN_NAME,
+      avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=administrator`,
+      statusMessage: 'System Administrator',
+      isOnline: false,
+      isOfficial: true,
+      friendIds: [],
+    };
+    try { accountsRepo.insert(adminAccount); } catch { /* dup */ }
+    usersRepo.upsert(adminUser);
+    console.log('[DB] Admin account created: administrator');
+  } else if (!existing.isAdmin) {
+    // 既存 administrator アカウントに isAdmin フラグを付与
+    sqlite.prepare('UPDATE accounts SET isAdmin = 1 WHERE id = ?').run(existing.id);
+  }
 }
 
 export { sqlite };

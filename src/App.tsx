@@ -42,7 +42,7 @@ export default function App() {
     mode: 'login' | 'register' | 'forgot';
   }>({ isOpen: false, mode: 'login' });
 
-  const [account, setAccount] = useState<{ id: string; name: string; email?: string } | null>(() => {
+  const [account, setAccount] = useState<{ id: string; name: string; email?: string; isAdmin?: boolean } | null>(() => {
     try {
       const saved = localStorage.getItem('line_app_account');
       return saved ? JSON.parse(saved) : null;
@@ -681,6 +681,7 @@ export default function App() {
               currentUser={me}
               accountEmail={account?.email}
               isLoggedIn={!!account}
+              isAdmin={!!account?.isAdmin}
               onUpdateProfile={handleUpdateProfile}
               onResetDatabase={handleResetDatabase}
               onOpenAuthModal={(mode = 'login') =>

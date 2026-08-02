@@ -7,6 +7,7 @@ export interface User {
   isOnline?: boolean;
   lastSeen?: string;
   friendIds?: string[];
+  isSuspended?: boolean;
 }
 
 export type MessageType = 'text' | 'sticker' | 'image' | 'video' | 'voice' | 'system';

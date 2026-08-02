@@ -12,14 +12,16 @@ export {
   verifyPassword,
   resetAllData,
   backupDatabase,
+  initAdminAccount,
 } from './database';
 
 export type { Account, ResetToken } from './database';
 
-import { migrateFromJsonIfNeeded } from './database';
+import { migrateFromJsonIfNeeded, initAdminAccount } from './database';
 
 // 起動時に一度だけ旧 JSON DB から移行し、SQLite を準備
 export function initDatabase(): void {
   migrateFromJsonIfNeeded();
+  initAdminAccount();
   console.log('[DB] SQLite database ready');
 }

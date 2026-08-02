@@ -11,6 +11,7 @@ import { usersRepo, roomsRepo, messagesRepo, initDatabase, backupDatabase } from
 import { authRouter } from './server/authRoutes';
 import { chatRouter } from './server/chatRoutes';
 import { albumRouter } from './server/albumRoutes';
+import { adminRouter } from './server/adminRoutes';
 
 const PORT = 3000;
 
@@ -376,6 +377,9 @@ app.use('/api', chatRouter);
 
 // Album Routes
 app.use('/api', albumRouter);
+
+// Admin Routes
+app.use('/api/admin', adminRouter);
 
 // Vite / Static setup
 async function startServer() {
