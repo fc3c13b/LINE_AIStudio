@@ -10,6 +10,7 @@ import { User, ChatRoom, Message, WSMessagePayload } from './src/types';
 import { db, saveDatabase, syncRoomLastMessages, hashPassword, verifyPassword, Account, ResetToken, DEFAULT_USERS, INITIAL_ROOMS, INITIAL_MESSAGES } from './server/db';
 import { authRouter } from './server/authRoutes';
 import { chatRouter } from './server/chatRoutes';
+import { albumRouter } from './server/albumRoutes';
 
 export { db, saveDatabase, syncRoomLastMessages, hashPassword, verifyPassword, DEFAULT_USERS, INITIAL_ROOMS, INITIAL_MESSAGES };
 export type { Account, ResetToken };
@@ -310,9 +311,21 @@ app.get('/api/health', (req, res) => {
 });
 
 // File Upload Route (Saves photo/video files to server disk)
+const ALLOWED_UPLOAD_MIME: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/jpg': 'jpg',
+  'image/png': 'png',
+  'image/gif': 'gif',
+  'image/webp': 'webp',
+  'video/mp4': 'mp4',
+  'video/webm': 'webm',
+  'video/quicktime': 'mov',
+};
+const MAX_UPLOAD_BYTES = 50 * 1024 * 1024; // 50MB
+
 app.post('/api/upload', (req, res) => {
   try {
-    const { fileName, dataUrl } = req.body;
+    const { fileName, dataUrl, userId } = req.body;
     if (!dataUrl) {
       return res.status(400).json({ error: 'dataUrl is required' });
     }
@@ -322,24 +335,34 @@ app.post('/api/upload', (req, res) => {
       return res.status(400).json({ error: 'Invalid dataUrl format' });
     }
 
-    const mimeType = matches[1];
+    const mimeType = matches[1].toLowerCase();
     const base64Data = matches[2];
+
+    // S-05: MIMEタイプ許可リスト検証
+    const ext = ALLOWED_UPLOAD_MIME[mimeType];
+    if (!ext) {
+      return res.status(415).json({ error: `未対応のファイル形式です: ${mimeType}` });
+    }
+
     const buffer = Buffer.from(base64Data, 'base64');
 
-    let ext = 'bin';
-    if (mimeType.includes('jpeg') || mimeType.includes('jpg')) ext = 'jpg';
-    else if (mimeType.includes('png')) ext = 'png';
-    else if (mimeType.includes('gif')) ext = 'gif';
-    else if (mimeType.includes('webp')) ext = 'webp';
-    else if (mimeType.includes('mp4')) ext = 'mp4';
-    else if (mimeType.includes('webm')) ext = 'webm';
-    else if (mimeType.includes('quicktime') || mimeType.includes('mov')) ext = 'mov';
+    // S-05: サイズ上限検証
+    if (buffer.length > MAX_UPLOAD_BYTES) {
+      return res.status(413).json({ error: 'ファイルサイズが上限(50MB)を超えています。' });
+    }
+
+    // D-03: ユーザーごとのディレクトリに保存
+    const safeUserId = typeof userId === 'string' ? userId.replace(/[^a-zA-Z0-9_-]/g, '') : '';
+    const targetDir = safeUserId ? path.join(UPLOADS_DIR, safeUserId) : UPLOADS_DIR;
+    if (!fs.existsSync(targetDir)) {
+      fs.mkdirSync(targetDir, { recursive: true });
+    }
 
     const fileId = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${ext}`;
-    const filePath = path.join(UPLOADS_DIR, fileId);
+    const filePath = path.join(targetDir, fileId);
     fs.writeFileSync(filePath, buffer);
 
-    const fileUrl = `/uploads/${fileId}`;
+    const fileUrl = safeUserId ? `/uploads/${safeUserId}/${fileId}` : `/uploads/${fileId}`;
     console.log(`[UPLOAD] File saved to server: ${filePath} -> ${fileUrl}`);
 
     return res.json({ url: fileUrl, fileName: fileName || fileId, mimeType });
@@ -354,6 +377,9 @@ app.use('/api/auth', authRouter);
 
 // Chat & User Routes
 app.use('/api', chatRouter);
+
+// Album Routes
+app.use('/api', albumRouter);
 
 // Vite / Static setup
 async function startServer() {

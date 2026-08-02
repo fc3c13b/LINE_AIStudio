@@ -16,26 +16,12 @@ import {
   Film,
   Play,
   Maximize2,
+  Loader2,
 } from 'lucide-react';
 import { apiUrl } from '../services/api';
+import type { Album, AlbumMedia, AlbumMediaType } from '../types';
 
-export type AlbumMediaType = 'photo' | 'video';
-
-export interface AlbumMedia {
-  id: string;
-  type: AlbumMediaType;
-  url: string;
-  title: string;
-  createdAt: string;
-}
-
-export interface Album {
-  id: string;
-  name: string;
-  items: AlbumMedia[];
-  createdAt: string;
-  updatedAt?: string;
-}
+export type { Album, AlbumMedia, AlbumMediaType };
 
 // Preset gallery photos for user selection
 const PRESET_SAMPLE_PHOTOS: { url: string; title: string }[] = [
@@ -89,81 +75,24 @@ const PRESET_SAMPLE_PHOTOS: { url: string; title: string }[] = [
   },
 ];
 
-const INITIAL_ALBUMS: Album[] = [
-  {
-    id: 'album-1',
-    name: '沖縄旅行の思い出 🌺',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    items: [
-      {
-        id: 'p-1',
-        type: 'photo',
-        url: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&auto=format&fit=crop&q=80',
-        title: 'きれいな海辺景色',
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: 'p-2',
-        type: 'photo',
-        url: 'https://images.unsplash.com/photo-1511920170033-f8396924c348?w=800&auto=format&fit=crop&q=80',
-        title: 'お気に入りのカフェ',
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: 'p-3',
-        type: 'photo',
-        url: 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=800&auto=format&fit=crop&q=80',
-        title: '歴史的街並み',
-        createdAt: new Date().toISOString(),
-      },
-    ],
-  },
-  {
-    id: 'album-2',
-    name: 'お気に入り写真 📸',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    items: [
-      {
-        id: 'p-4',
-        type: 'photo',
-        url: 'https://images.unsplash.com/photo-1528164344705-47542687990d?w=800&auto=format&fit=crop&q=80',
-        title: '富士山と桜',
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: 'p-5',
-        type: 'photo',
-        url: 'https://images.unsplash.com/photo-1503899036084-c55cdd92da26?w=800&auto=format&fit=crop&q=80',
-        title: '夜景スポット',
-        createdAt: new Date().toISOString(),
-      },
-    ],
-  },
-];
-
 interface AlbumTabProps {
   onOpenAuthModal?: () => void;
   isLoggedIn?: boolean;
+  userId?: string | null;
 }
 
-export const AlbumTab: React.FC<AlbumTabProps> = () => {
-  const [albums, setAlbums] = useState<Album[]>(() => {
-    try {
-      const saved = localStorage.getItem('line_app_albums_v3');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-      return INITIAL_ALBUMS;
-    } catch {
-      return INITIAL_ALBUMS;
-    }
-  });
+export const AlbumTab: React.FC<AlbumTabProps> = ({ onOpenAuthModal, isLoggedIn = false, userId = null }) => {
+  const [albums, setAlbums] = useState<Album[]>([]);
+  const [isLoadingAlbums, setIsLoadingAlbums] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
 
   const [activeAlbumId, setActiveAlbumId] = useState<string | null>(null);
   const [selectedMediaIndex, setSelectedMediaIndex] = useState<number | null>(null);
+
+  // Lightbox スワイプ操作 (U-06)
+  const [dragStartX, setDragStartX] = useState<number | null>(null);
+  const [dragOffsetX, setDragOffsetX] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
 
   // Photo Picker Modal States
   // 'closed' | 'select_photos' | 'album_info'
@@ -182,13 +111,40 @@ export const AlbumTab: React.FC<AlbumTabProps> = () => {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
+  // サーバーからアルバム一覧を取得
+  const fetchAlbums = async (uid: string) => {
+    setIsLoadingAlbums(true);
     try {
-      localStorage.setItem('line_app_albums_v3', JSON.stringify(albums));
-    } catch (e) {
-      console.error('Failed to save albums to localStorage', e);
+      const res = await fetch(apiUrl(`/api/albums?userId=${encodeURIComponent(uid)}`));
+      if (res.ok) {
+        const data: Album[] = await res.json();
+        setAlbums(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch albums:', err);
+    } finally {
+      setIsLoadingAlbums(false);
     }
-  }, [albums]);
+  };
+
+  useEffect(() => {
+    if (userId) {
+      fetchAlbums(userId);
+    } else {
+      setAlbums([]);
+      setActiveAlbumId(null);
+    }
+  }, [userId]);
+
+  // ローカルのアルバム配列を更新（サーバー応答を反映）
+  const upsertAlbum = (album: Album) => {
+    setAlbums((prev) => {
+      if (prev.some((a) => a.id === album.id)) {
+        return prev.map((a) => (a.id === album.id ? album : a));
+      }
+      return [album, ...prev];
+    });
+  };
 
   const activeAlbum = albums.find((a) => a.id === activeAlbumId);
 
@@ -224,6 +180,9 @@ export const AlbumTab: React.FC<AlbumTabProps> = () => {
     if (!fileList || fileList.length === 0) return;
     const files: File[] = Array.from(fileList);
 
+    setIsUploading(true);
+    let remaining = files.length;
+
     files.forEach((file: File) => {
       const isVideo = file.type.startsWith('video');
       const reader = new FileReader();
@@ -236,11 +195,14 @@ export const AlbumTab: React.FC<AlbumTabProps> = () => {
             const res = await fetch(apiUrl('/api/upload'), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ fileName: file.name, dataUrl: rawDataUrl }),
+              body: JSON.stringify({ fileName: file.name, dataUrl: rawDataUrl, userId }),
             });
             if (res.ok) {
               const data = await res.json();
               finalUrl = data.url;
+            } else {
+              const errData = await res.json().catch(() => ({}));
+              alert(errData.error || 'ファイルのアップロードに失敗しました。');
             }
           } catch (err) {
             console.error('File upload error:', err);
@@ -254,6 +216,8 @@ export const AlbumTab: React.FC<AlbumTabProps> = () => {
 
           setSelectedPhotos((prev) => [...prev, photoObj]);
         }
+        remaining -= 1;
+        if (remaining <= 0) setIsUploading(false);
       };
       reader.readAsDataURL(file);
     });
@@ -275,32 +239,26 @@ export const AlbumTab: React.FC<AlbumTabProps> = () => {
   };
 
   // Next step in picker or save photos
-  const handlePickerNext = () => {
+  const handlePickerNext = async () => {
     if (selectedPhotos.length === 0) return;
 
     if (pickerTargetAlbumId) {
-      // Adding to existing album directly
-      const newItems: AlbumMedia[] = selectedPhotos.map((p, idx) => ({
-        id: `media-${Date.now()}-${idx}`,
-        type: p.type || 'photo',
-        url: p.url,
-        title: p.title || '写真',
-        createdAt: new Date().toISOString(),
-      }));
-
-      setAlbums((prev) =>
-        prev.map((a) => {
-          if (a.id === pickerTargetAlbumId) {
-            return {
-              ...a,
-              items: [...newItems, ...a.items],
-              updatedAt: new Date().toISOString(),
-            };
-          }
-          return a;
-        })
-      );
-
+      // 既存アルバムへサーバー経由でメディア追加
+      try {
+        const res = await fetch(apiUrl(`/api/albums/${pickerTargetAlbumId}/media`), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            items: selectedPhotos.map((p) => ({ type: p.type || 'photo', url: p.url, title: p.title || '写真' })),
+          }),
+        });
+        if (res.ok) {
+          const updated: Album = await res.json();
+          upsertAlbum(updated);
+        }
+      } catch (err) {
+        console.error('Failed to add media:', err);
+      }
       setPickerStep('closed');
       setSelectedPhotos([]);
     } else {
@@ -309,74 +267,120 @@ export const AlbumTab: React.FC<AlbumTabProps> = () => {
     }
   };
 
-  // Complete creation of new album
-  const handleFinishCreateAlbum = (e: React.FormEvent) => {
+  // Complete creation of new album（サーバー保存）
+  const handleFinishCreateAlbum = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newAlbumName.trim() || selectedPhotos.length === 0) return;
+    if (!newAlbumName.trim() || selectedPhotos.length === 0 || !userId) return;
 
-    const newItems: AlbumMedia[] = selectedPhotos.map((p, idx) => ({
-      id: `media-${Date.now()}-${idx}`,
-      type: p.type || 'photo',
-      url: p.url,
-      title: p.title || '写真',
-      createdAt: new Date().toISOString(),
-    }));
+    try {
+      const res = await fetch(apiUrl('/api/albums'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ownerId: userId,
+          name: newAlbumName.trim(),
+          items: selectedPhotos.map((p) => ({ type: p.type || 'photo', url: p.url, title: p.title || '写真' })),
+        }),
+      });
+      if (res.ok) {
+        const created: Album = await res.json();
+        upsertAlbum(created);
+        setActiveAlbumId(created.id);
+      }
+    } catch (err) {
+      console.error('Failed to create album:', err);
+    }
 
-    const newAlbum: Album = {
-      id: `album-${Date.now()}`,
-      name: newAlbumName.trim(),
-      items: newItems,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    setAlbums((prev) => [newAlbum, ...prev]);
-    setActiveAlbumId(newAlbum.id);
     setPickerStep('closed');
     setSelectedPhotos([]);
     setNewAlbumName('');
   };
 
-  // Delete an album
-  const handleDeleteAlbum = (albumId: string) => {
+  // Delete an album（サーバー削除。ファイルも削除される）
+  const handleDeleteAlbum = async (albumId: string) => {
     if (!confirm('このアルバムを削除しますか？アルバム内の写真もすべて削除されます。')) return;
-    setAlbums((prev) => prev.filter((a) => a.id !== albumId));
-    if (activeAlbumId === albumId) setActiveAlbumId(null);
+    try {
+      const res = await fetch(apiUrl(`/api/albums/${albumId}`), { method: 'DELETE' });
+      if (res.ok) {
+        setAlbums((prev) => prev.filter((a) => a.id !== albumId));
+        if (activeAlbumId === albumId) setActiveAlbumId(null);
+      }
+    } catch (err) {
+      console.error('Failed to delete album:', err);
+    }
     setMenuAlbumId(null);
   };
 
-  // Rename an album
-  const handleSaveRenameAlbum = (e: React.FormEvent) => {
+  // Rename an album（サーバー更新）
+  const handleSaveRenameAlbum = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!menuAlbumId || !renameInputValue.trim()) return;
 
-    setAlbums((prev) =>
-      prev.map((a) => (a.id === menuAlbumId ? { ...a, name: renameInputValue.trim() } : a))
-    );
+    try {
+      const res = await fetch(apiUrl(`/api/albums/${menuAlbumId}`), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: renameInputValue.trim() }),
+      });
+      if (res.ok) {
+        const updated: Album = await res.json();
+        upsertAlbum(updated);
+      }
+    } catch (err) {
+      console.error('Failed to rename album:', err);
+    }
     setIsRenameModalOpen(false);
     setMenuAlbumId(null);
     setRenameInputValue('');
   };
 
-  // Delete individual media from inside album
-  const handleDeleteMediaFromAlbum = (albumId: string, mediaId: string) => {
+  // Delete individual media from inside album（サーバー削除。ファイルも削除）
+  const handleDeleteMediaFromAlbum = async (albumId: string, mediaId: string) => {
     if (!confirm('この写真をアルバムから削除しますか？')) return;
-    setAlbums((prev) =>
-      prev.map((a) => {
-        if (a.id === albumId) {
-          return {
-            ...a,
-            items: a.items.filter((item) => item.id !== mediaId),
-            updatedAt: new Date().toISOString(),
-          };
-        }
-        return a;
-      })
-    );
+    try {
+      const res = await fetch(apiUrl(`/api/albums/${albumId}/media/${mediaId}`), { method: 'DELETE' });
+      if (res.ok) {
+        const updated: Album = await res.json();
+        upsertAlbum(updated);
+      }
+    } catch (err) {
+      console.error('Failed to delete media:', err);
+    }
     setSelectedMediaIndex(null);
   };
 
-  // Render album cover grid (LINE style collage)
+  // Lightbox の前後移動
+  const goToPrevMedia = () => {
+    setSelectedMediaIndex((idx) => (idx !== null && idx > 0 ? idx - 1 : idx));
+    setDragOffsetX(0);
+  };
+  const goToNextMedia = () => {
+    setSelectedMediaIndex((idx) =>
+      idx !== null && activeAlbum && idx < activeAlbum.items.length - 1 ? idx + 1 : idx
+    );
+    setDragOffsetX(0);
+  };
+
+  // スワイプ / ドラッグ ハンドラ
+  const handleTouchStart = (e: React.TouchEvent | React.MouseEvent) => {
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    setDragStartX(clientX);
+    setIsDragging(true);
+  };
+  const handleTouchMove = (e: React.TouchEvent | React.MouseEvent) => {
+    if (!isDragging || dragStartX === null) return;
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    setDragOffsetX(clientX - dragStartX);
+  };
+  const handleTouchEnd = () => {
+    if (!isDragging) return;
+    setIsDragging(false);
+    const threshold = 60;
+    if (dragOffsetX < -threshold) goToNextMedia();
+    else if (dragOffsetX > threshold) goToPrevMedia();
+    else setDragOffsetX(0);
+    setDragStartX(null);
+  };
   const renderAlbumCover = (items: AlbumMedia[]) => {
     if (!items || items.length === 0) {
       return (
@@ -424,6 +428,27 @@ export const AlbumTab: React.FC<AlbumTabProps> = () => {
 
   return (
     <div className="flex-1 flex flex-col bg-slate-50 overflow-hidden font-sans relative">
+      {!isLoggedIn ? (
+        /* 未ログイン時のガード */
+        <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-4">
+          <div className="w-16 h-16 rounded-full bg-emerald-50 text-[#00c300] flex items-center justify-center">
+            <Images className="w-8 h-8" />
+          </div>
+          <div>
+            <h3 className="font-bold text-slate-800 text-sm">アルバムはログイン後に利用できます</h3>
+            <p className="text-xs text-slate-500 mt-1 max-w-xs">
+              ログインすると、写真・動画をサーバーに保存してアルバムとして管理できます。
+            </p>
+          </div>
+          <button
+            onClick={() => onOpenAuthModal && onOpenAuthModal()}
+            className="px-5 py-2.5 bg-[#00c300] hover:bg-[#00b000] text-white font-bold text-xs rounded-xl transition shadow-xs cursor-pointer"
+          >
+            ログイン / 新規登録
+          </button>
+        </div>
+      ) : (
+        <>
       {/* 1. ALBUM LIST VIEW (Standard LINE Album Grid) */}
       {!activeAlbumId ? (
         <div className="flex-1 flex flex-col overflow-y-auto">
@@ -447,7 +472,12 @@ export const AlbumTab: React.FC<AlbumTabProps> = () => {
 
           {/* Albums Cards Grid */}
           <div className="p-2 sm:p-3 flex-1 w-full">
-            {albums.length > 0 ? (
+            {isLoadingAlbums && albums.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-slate-400 gap-2">
+                <Loader2 className="w-6 h-6 animate-spin" />
+                <span className="text-xs font-medium">アルバムを読み込み中...</span>
+              </div>
+            ) : albums.length > 0 ? (
               <div className="grid grid-cols-2 gap-2 w-full">
                 {albums.map((album) => (
                   <div
@@ -664,10 +694,20 @@ export const AlbumTab: React.FC<AlbumTabProps> = () => {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => fileInputRef.current?.click()}
-                      className="flex-1 py-2 px-3 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-[#00c300] font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer"
+                      disabled={isUploading}
+                      className="flex-1 py-2 px-3 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-[#00c300] font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer disabled:opacity-60"
                     >
-                      <Upload className="w-4 h-4" />
-                      <span>端末から写真をまとめて選択 (複数可)</span>
+                      {isUploading ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>サーバーへ保存中...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="w-4 h-4" />
+                          <span>端末から写真をまとめて選択 (複数可)</span>
+                        </>
+                      )}
                     </button>
                     <input
                       type="file"
@@ -884,7 +924,16 @@ export const AlbumTab: React.FC<AlbumTabProps> = () => {
           </div>
 
           {/* Center Stage */}
-          <div className="flex-1 relative flex items-center justify-center p-0 w-full">
+          <div
+            className="flex-1 relative flex items-center justify-center p-0 w-full overflow-hidden touch-none"
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onMouseDown={handleTouchStart}
+            onMouseMove={handleTouchMove}
+            onMouseUp={handleTouchEnd}
+            onMouseLeave={handleTouchEnd}
+          >
             {selectedMediaIndex > 0 && (
               <button
                 onClick={() => setSelectedMediaIndex(selectedMediaIndex - 1)}
@@ -894,11 +943,25 @@ export const AlbumTab: React.FC<AlbumTabProps> = () => {
               </button>
             )}
 
-            <img
-              src={activeAlbum.items[selectedMediaIndex].url}
-              alt=""
-              className="max-h-[85vh] w-full object-contain shadow-2xl"
-            />
+            <div
+              className="max-w-full max-h-full flex items-center justify-center transition-transform duration-75 ease-out cursor-grab active:cursor-grabbing"
+              style={{ transform: `translateX(${dragOffsetX}px) rotate(${dragOffsetX * 0.02}deg)` }}
+            >
+              {activeAlbum.items[selectedMediaIndex].type === 'video' ? (
+                <video
+                  src={activeAlbum.items[selectedMediaIndex].url}
+                  controls
+                  autoPlay
+                  className="max-h-[85vh] w-auto max-w-full object-contain bg-black shadow-2xl"
+                />
+              ) : (
+                <img
+                  src={activeAlbum.items[selectedMediaIndex].url}
+                  alt=""
+                  className="max-h-[85vh] w-auto max-w-full object-contain shadow-2xl pointer-events-none"
+                />
+              )}
+            </div>
 
             {selectedMediaIndex < activeAlbum.items.length - 1 && (
               <button
@@ -917,6 +980,8 @@ export const AlbumTab: React.FC<AlbumTabProps> = () => {
             </p>
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   );

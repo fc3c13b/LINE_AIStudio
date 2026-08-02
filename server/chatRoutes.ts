@@ -263,6 +263,7 @@ chatRouter.post('/seed/reset', (req, res) => {
   db.messages = INITIAL_MESSAGES;
   db.resetTokens = [];
   db.friendRequests = [];
+  db.albums = [];
   saveDatabase();
   res.json({ message: 'Database reset to default seed' });
 });

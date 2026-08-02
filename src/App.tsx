@@ -650,6 +650,7 @@ export default function App() {
 
           {activeTab === 'album' && (
             <AlbumTab
+              userId={account ? me.id : null}
               isLoggedIn={!!account}
               onOpenAuthModal={() => setAuthModalState({ isOpen: true, mode: 'login' })}
             />

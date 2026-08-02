@@ -71,6 +71,27 @@ export interface FriendRequest {
   updatedAt: string;
 }
 
+// アルバム（サーバー保持）
+export type AlbumMediaType = 'photo' | 'video';
+
+export interface AlbumMedia {
+  id: string;
+  type: AlbumMediaType;
+  url: string;
+  thumbUrl?: string;
+  title: string;
+  createdAt: string;
+}
+
+export interface Album {
+  id: string;
+  ownerId: string;
+  name: string;
+  items: AlbumMedia[];
+  createdAt: string;
+  updatedAt?: string;
+}
+
 export interface MusicItem {
   id: string;
   title: string;
