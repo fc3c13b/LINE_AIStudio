@@ -548,23 +548,12 @@ export const AlbumTab: React.FC<AlbumTabProps> = ({ onOpenAuthModal, isLoggedIn 
                 ))}
               </div>
             ) : (
-              <div className="bg-white rounded-2xl border border-slate-200/90 p-8 text-center space-y-3.5 my-6">
+              <div className="bg-white rounded-2xl border border-slate-200/90 p-8 text-center space-y-2 my-6">
                 <div className="w-14 h-14 mx-auto rounded-full bg-emerald-50 text-[#00c300] flex items-center justify-center">
                   <Images className="w-7 h-7" />
                 </div>
-                <div>
-                  <h3 className="font-bold text-slate-800 text-sm">アルバムがまだありません</h3>
-                  <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
-                    写真を選択して「アルバム作成」をタップすると、大切な思い出をグループでまとめて保存できます。
-                  </p>
-                </div>
-                <button
-                  onClick={handleOpenPickerForNewAlbum}
-                  className="px-5 py-2.5 bg-[#00c300] hover:bg-[#00b000] text-white font-bold text-xs rounded-xl transition shadow-xs cursor-pointer inline-flex items-center gap-1.5"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>最初のアルバムを作成する</span>
-                </button>
+                <h3 className="font-bold text-slate-800 text-sm">アルバムがまだありません</h3>
+                <p className="text-xs text-slate-500">上部の「アルバム作成」ボタンから作成できます</p>
               </div>
             )}
           </div>
@@ -738,52 +727,35 @@ export const AlbumTab: React.FC<AlbumTabProps> = ({ onOpenAuthModal, isLoggedIn 
                   </div>
                 </div>
 
-                {/* Preset Sample Gallery Photos Grid */}
+                {/* アップロードした写真のプレビューのみ表示（サンプル写真廃止） */}
                 <div className="flex-1 overflow-y-auto p-3">
-                  <div className="mb-2 flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-700">サンプル写真ライブラリ</span>
-                    <span className="text-[10px] text-slate-500 font-medium">タップして複数選択</span>
-                  </div>
-
-                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                    {PRESET_SAMPLE_PHOTOS.map((photo) => {
-                      const selectedIdx = selectedPhotos.findIndex((p) => p.url === photo.url);
-                      const isSelected = selectedIdx !== -1;
-
-                      return (
+                  {selectedPhotos.length === 0 ? (
+                    <div className="text-center py-8 text-xs text-slate-400">
+                      上のボタンから端末の写真・動画を選択してください
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-3 gap-2">
+                      {selectedPhotos.map((photo, idx) => (
                         <div
-                          key={photo.url}
+                          key={idx}
                           onClick={() => handleTogglePhotoSelection(photo)}
-                          className={`relative aspect-square rounded-xl overflow-hidden cursor-pointer border-2 transition select-none group ${
-                            isSelected
-                              ? 'border-[#00c300] ring-2 ring-[#00c300]/30 scale-[0.98]'
-                              : 'border-transparent hover:border-slate-300'
-                          }`}
+                          className="relative aspect-square rounded-xl overflow-hidden cursor-pointer border-2 border-[#00c300] ring-2 ring-[#00c300]/30"
                         >
-                          <img
-                            src={photo.url}
-                            alt={photo.title}
-                            className="w-full h-full object-cover"
-                          />
-
-                          {/* Selection Badge Number (1, 2, 3...) like Market LINE */}
-                          <div
-                            className={`absolute top-1.5 right-1.5 w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs transition shadow-md ${
-                              isSelected
-                                ? 'bg-[#00c300] text-white scale-110'
-                                : 'bg-black/40 border border-white/60 text-white hover:bg-black/60'
-                            }`}
-                          >
-                            {isSelected ? selectedIdx + 1 : ''}
+                          {photo.type === 'video' ? (
+                            <video src={photo.url} className="w-full h-full object-cover" />
+                          ) : (
+                            <img src={photo.url} alt={photo.title} className="w-full h-full object-cover" />
+                          )}
+                          <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-[#00c300] text-white flex items-center justify-center text-[10px] font-bold shadow">
+                            {idx + 1}
                           </div>
-
-                          <div className="absolute inset-x-0 bottom-0 p-1 bg-gradient-to-t from-black/70 to-transparent text-[9px] text-white font-medium truncate">
-                            {photo.title}
+                          <div className="absolute top-1.5 left-1.5 w-5 h-5 rounded-full bg-black/60 text-white flex items-center justify-center">
+                            <X className="w-3 h-3" />
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Bottom Sticky Action Bar */}

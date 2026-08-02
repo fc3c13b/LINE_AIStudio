@@ -176,39 +176,47 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
   }, [viewerIndex, mediaMessages.length]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
 
     setIsUploadingFile(true);
-    const reader = new FileReader();
-    reader.onload = async (evt) => {
-      if (evt.target?.result) {
-        const dataUrl = evt.target.result as string;
-        const isVideo = file.type.startsWith('video');
+    let remaining = files.length;
 
-        try {
-          const res = await fetch(apiUrl('/api/upload'), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fileName: file.name, dataUrl }),
-          });
+    files.forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = async (evt) => {
+        if (evt.target?.result) {
+          const dataUrl = evt.target.result as string;
+          const isVideo = file.type.startsWith('video');
 
-          if (res.ok) {
-            const data = await res.json();
-            onSendMessage(isVideo ? 'video' : 'image', data.url, { fileName: file.name });
-          } else {
+          try {
+            const res = await fetch(apiUrl('/api/upload'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ fileName: file.name, dataUrl }),
+            });
+
+            if (res.ok) {
+              const data = await res.json();
+              onSendMessage(isVideo ? 'video' : 'image', data.url, { fileName: file.name });
+            } else {
+              onSendMessage(isVideo ? 'video' : 'image', dataUrl, { fileName: file.name });
+            }
+          } catch (uploadErr) {
+            console.error('Failed to upload file to server:', uploadErr);
             onSendMessage(isVideo ? 'video' : 'image', dataUrl, { fileName: file.name });
+          } finally {
+            remaining -= 1;
+            if (remaining <= 0) {
+              setIsUploadingFile(false);
+              setShowPlusMenu(false);
+            }
           }
-        } catch (uploadErr) {
-          console.error('Failed to upload file to server:', uploadErr);
-          onSendMessage(isVideo ? 'video' : 'image', dataUrl, { fileName: file.name });
-        } finally {
-          setIsUploadingFile(false);
-          setShowPlusMenu(false);
         }
-      }
-    };
-    reader.readAsDataURL(file);
+      };
+      reader.readAsDataURL(file);
+    });
+
     e.target.value = '';
   };
 
@@ -755,6 +763,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
         type="file"
         ref={fileInputRef}
         accept="image/*,video/*"
+        multiple
         onChange={handleFileUpload}
         className="hidden"
       />
