@@ -119,6 +119,10 @@ sqlite.exec(`
   );
 `);
 
+// 既存DBへの後方互換: prepared statement 作成前に列を追加
+ try { sqlite.exec(`ALTER TABLE users ADD COLUMN isSuspended INTEGER DEFAULT 0`); } catch { /* already exists */ }
+try { sqlite.exec(`ALTER TABLE accounts ADD COLUMN isAdmin INTEGER DEFAULT 0`); } catch { /* already exists */ }
+
 // D-02: メッセージ全文検索 (FTS5)。未対応環境ではLIKEにフォールバック
 let ftsEnabled = false;
 try {
@@ -522,11 +526,7 @@ export function migrateFromJsonIfNeeded(): void {
 
 // ---- 管理者アカウントの初期化（カラム追加のみ・既存登録済まで対応）----
 export function initAdminAccount(): void {
-  // ALTER TABLE で isAdmin/isSuspended 列を追加（既存DBへの後方互換）
-  try { sqlite.exec(`ALTER TABLE accounts ADD COLUMN isAdmin INTEGER DEFAULT 0`); } catch { /* already exists */ }
-  try { sqlite.exec(`ALTER TABLE users ADD COLUMN isSuspended INTEGER DEFAULT 0`); } catch { /* already exists */ }
-
-  // 既存の administrator アカウントにまだ isAdmin が付いていなければ付与
+  // 既存 administrator アカウントにまだ isAdmin が付いていなければ付与
   const existing = accountsRepo.getByName('administrator');
   if (existing && !existing.isAdmin) {
     sqlite.prepare('UPDATE accounts SET isAdmin = 1 WHERE id = ?').run(existing.id);
