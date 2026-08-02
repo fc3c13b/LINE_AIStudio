@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { ChatRoom as ChatRoomType, Message, User, Sticker } from '../types';
+import { ChatSettings, DEFAULT_CHAT_SETTINGS } from './SettingsTab';
 import { apiUrl } from '../services/api';
 import { STICKER_SETS } from '../data/stickers';
 import {
@@ -49,6 +50,7 @@ interface ChatRoomProps {
   replyingTo?: Message | null;
   onSetReplyingTo?: (msg: Message | null) => void;
   onLoadOlderMessages?: (roomId: string) => Promise<boolean>;
+  chatSettings?: ChatSettings;
   onOpenAlbums?: () => void;
 }
 
@@ -66,6 +68,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
   replyingTo,
   onSetReplyingTo,
   onLoadOlderMessages,
+  chatSettings = DEFAULT_CHAT_SETTINGS,
   onOpenAlbums,
 }) => {
   const [inputText, setInputText] = useState('');
@@ -627,10 +630,11 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
                   {/* Message Content Bubble */}
                   <div
                     onClick={() => setSelectedMsgForMenu(selectedMsgForMenu?.id === msg.id ? null : msg)}
-                    className={`p-2 rounded-xl text-xs shadow-xs relative break-words leading-relaxed transition cursor-pointer select-none ${
+                    style={{ fontSize: chatSettings.fontSize, borderWidth: chatSettings.bubbleBorder }}
+                    className={`p-2 rounded-xl shadow-xs relative break-words leading-relaxed transition cursor-pointer select-none border ${
                       isMe
-                        ? 'bg-[#85e249] text-slate-950 rounded-tr-none font-normal'
-                        : 'bg-white text-slate-900 rounded-tl-none border border-slate-200/90'
+                        ? 'bg-[#85e249] text-slate-950 rounded-tr-none font-normal border-emerald-300/50'
+                        : 'bg-white text-slate-900 rounded-tl-none border-slate-200/90'
                     }`}
                   >
                     {/* 引用リプライ元 */}
@@ -655,10 +659,13 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
                     {msg.type === 'image' && (
                       <div
                         onClick={(e) => { e.stopPropagation(); openViewerForMessage(msg.id); }}
-                        className="max-w-[160px] overflow-hidden rounded-lg border border-black/10 cursor-pointer relative group transition hover:opacity-95 shadow-xs"
+                        className="overflow-hidden rounded-lg border border-black/10 cursor-pointer relative group transition hover:opacity-95 shadow-xs"
+                        style={{ maxWidth: chatSettings.maxPhotoHeight }}
                         title="タップして全画面表示"
                       >
-                        <img src={msg.content} alt="送信画像" className="w-full h-auto object-cover" />
+                        <img src={msg.content} alt="送信画像"
+                          style={{ maxHeight: chatSettings.maxPhotoHeight }}
+                          className="w-full object-cover" />
                         <div className="absolute top-1.5 right-1.5 p-1 rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 transition backdrop-blur-xs">
                           <Maximize2 className="w-3 h-3" />
                         </div>
@@ -720,9 +727,10 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
                   </div>
 
                   {/* Read / Timestamp */}
-                  <div className={`flex flex-col text-[9px] text-white/80 font-medium shrink-0 mb-0.5 ${isMe ? 'items-end text-right' : 'items-start'}`}>
+                  <div className={`flex flex-col font-medium shrink-0 mb-0.5 ${isMe ? 'items-end text-right' : 'items-start'}`}
+                    style={{ fontSize: chatSettings.timestampSize, color: 'rgba(255,255,255,0.8)' }}>
                     {isMe && (
-                      <span className="font-bold text-white text-[9px] leading-tight">
+                      <span className="font-bold text-white leading-tight">
                         {isRead ? '既読' : ''}
                       </span>
                     )}
@@ -1063,8 +1071,15 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
       {/* Fullscreen Media Lightbox Modal */}
       {viewerIndex !== null && mediaMessages[viewerIndex] && (
         <div className="fixed inset-0 z-50 bg-black/95 backdrop-blur-md flex flex-col justify-between select-none animate-in fade-in duration-200">
-          {/* Top Control Bar */}
-          <div className="p-4 flex items-center justify-between text-white bg-gradient-to-b from-black/80 to-transparent z-20">
+          {/* Top Control Bar: 左上に← 戻るボタン */}
+          <div className="p-3 flex items-center justify-between text-white bg-gradient-to-b from-black/80 to-transparent z-20">
+            <button
+              onClick={closeViewer}
+              className="p-2.5 rounded-full bg-white/10 hover:bg-white/25 active:scale-90 text-white transition flex items-center justify-center cursor-pointer shadow-lg border border-white/20"
+              title="戻る"
+            >
+              <ChevronLeft className="w-6 h-6" />
+            </button>
             <div className="flex items-center gap-3">
               <span className="px-2.5 py-1 bg-white/20 rounded-full text-xs font-bold tracking-wider">
                 {viewerIndex + 1} / {mediaMessages.length}
@@ -1083,14 +1098,6 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
                 </div>
               </div>
             </div>
-
-            <button
-              onClick={closeViewer}
-              className="p-2.5 rounded-full bg-white/10 hover:bg-white/25 active:scale-90 text-white transition flex items-center justify-center cursor-pointer shadow-lg border border-white/20"
-              title="閉じる (Esc)"
-            >
-              <X className="w-6 h-6" />
-            </button>
           </div>
 
           {/* Center Main Stage (Drag / Swipeable Area) */}

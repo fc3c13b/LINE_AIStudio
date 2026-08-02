@@ -59,17 +59,7 @@ export const ChatsTab: React.FC<ChatsTabProps> = ({
       <div className="px-4 py-3 border-b border-slate-200/80 flex items-center justify-between bg-white z-10">
         <div className="flex items-baseline gap-2">
           <h1 className="text-xl font-bold text-slate-900 tracking-tight">トーク</h1>
-          <span className="text-[10px] font-mono font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-md">
-            v1.2.1 (入力枠常時表示修正完了)
-          </span>
         </div>
-        <button
-          onClick={onOpenNewChatModal}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#00c300] hover:bg-[#00b000] text-white rounded-full text-xs font-bold transition shadow-xs"
-        >
-          <MessageSquarePlus className="w-4 h-4" />
-          <span>新規トーク</span>
-        </button>
       </div>
 
       {/* Search Input */}

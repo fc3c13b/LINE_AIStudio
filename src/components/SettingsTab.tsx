@@ -11,14 +11,31 @@ import {
   UserCheck2,
   Trash2,
   AlertTriangle,
+  MessageSquare,
 } from 'lucide-react';
 import { apiUrl } from '../services/api';
+
+export interface ChatSettings {
+  fontSize: number;       // px: 10-18
+  bubbleBorder: number;   // px: 0-4
+  maxPhotoHeight: number; // px: 80-300
+  timestampSize: number;  // px: 8-14
+}
+
+export const DEFAULT_CHAT_SETTINGS: ChatSettings = {
+  fontSize: 12,
+  bubbleBorder: 0,
+  maxPhotoHeight: 160,
+  timestampSize: 9,
+};
 
 interface SettingsTabProps {
   currentUser: User;
   accountEmail?: string;
   isLoggedIn?: boolean;
   isAdmin?: boolean;
+  chatSettings: ChatSettings;
+  onChatSettingsChange: (s: ChatSettings) => void;
   onUpdateProfile: (name: string, statusMessage: string, avatar: string) => void;
   onResetDatabase: () => void;
   onOpenAuthModal: (mode?: 'login' | 'register' | 'forgot') => void;
@@ -32,6 +49,8 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
   accountEmail,
   isLoggedIn = false,
   isAdmin = false,
+  chatSettings,
+  onChatSettingsChange,
   onUpdateProfile,
   onResetDatabase,
   onOpenAuthModal,
@@ -284,6 +303,36 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
             </div>
           </div>
         )}
+
+        {/* チャット表示設定 */}
+        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
+          <h2 className="font-bold text-sm text-slate-900 flex items-center gap-2">
+            <MessageSquare className="w-4 h-4 text-emerald-500" />
+            <span>チャット表示設定</span>
+          </h2>
+          {([
+            { key: 'fontSize' as const, label: '文字サイズ', unit: 'px', min: 10, max: 18, step: 1 },
+            { key: 'bubbleBorder' as const, label: '吹き出し線幅', unit: 'px', min: 0, max: 4, step: 1 },
+            { key: 'maxPhotoHeight' as const, label: '写真最大縦サイズ', unit: 'px', min: 60, max: 300, step: 10 },
+            { key: 'timestampSize' as const, label: '日時サイズ', unit: 'px', min: 7, max: 14, step: 1 },
+          ]).map(({ key, label, unit, min, max, step }) => (
+            <div key={key} className="flex items-center gap-3">
+              <span className="text-xs text-slate-600 w-28 shrink-0">{label}</span>
+              <input
+                type="range" min={min} max={max} step={step}
+                value={chatSettings[key]}
+                onChange={(e) => onChatSettingsChange({ ...chatSettings, [key]: Number(e.target.value) })}
+                className="flex-1 accent-[#00c300]"
+              />
+              <span className="text-xs font-mono text-slate-500 w-12 text-right">{chatSettings[key]}{unit}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* バージョン表示 */}
+        <div className="text-center py-3 text-[10px] text-slate-400 font-mono">
+          LINE AIStudio v0.5.9
+        </div>
       </div>
     </div>
   );

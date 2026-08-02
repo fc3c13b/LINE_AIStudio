@@ -6,7 +6,7 @@ import { SmartphoneFrame } from './components/SmartphoneFrame';
 import { HomeTab } from './components/HomeTab';
 import { ChatsTab } from './components/ChatsTab';
 import { ChatRoom as ChatRoomComponent } from './components/ChatRoom';
-import { SettingsTab } from './components/SettingsTab';
+import { SettingsTab, DEFAULT_CHAT_SETTINGS, ChatSettings } from './components/SettingsTab';
 import { AlbumTab } from './components/AlbumTab';
 import { MusicTab } from './components/MusicTab';
 import { LockScreen } from './components/LockScreen';
@@ -28,6 +28,19 @@ export default function App() {
     outgoing: [],
   });
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+
+  // チャット表示設定（localStorageで永続化）
+  const [chatSettings, setChatSettings] = useState<ChatSettings>(() => {
+    try {
+      const saved = localStorage.getItem('line_chat_settings');
+      return saved ? { ...DEFAULT_CHAT_SETTINGS, ...JSON.parse(saved) } : DEFAULT_CHAT_SETTINGS;
+    } catch { return DEFAULT_CHAT_SETTINGS; }
+  });
+
+  const handleChatSettingsChange = (s: ChatSettings) => {
+    setChatSettings(s);
+    localStorage.setItem('line_chat_settings', JSON.stringify(s));
+  };
 
   // タイピング送信のデバウンス用
   const typingDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -628,6 +641,7 @@ export default function App() {
           replyingTo={replyingTo}
           onSetReplyingTo={setReplyingTo}
           onLoadOlderMessages={handleLoadOlderMessages}
+          chatSettings={chatSettings}
           onOpenAlbums={() => {
             setActiveRoomId(null);
             setActiveTab('album');
@@ -686,6 +700,8 @@ export default function App() {
               accountEmail={account?.email}
               isLoggedIn={!!account}
               isAdmin={!!account?.isAdmin}
+              chatSettings={chatSettings}
+              onChatSettingsChange={handleChatSettingsChange}
               onUpdateProfile={handleUpdateProfile}
               onResetDatabase={handleResetDatabase}
               onOpenAuthModal={(mode = 'login') =>
