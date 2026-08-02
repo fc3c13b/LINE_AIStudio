@@ -559,8 +559,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
                 <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[75%]`}>
                   {!isMe && (
                     <span className="text-[9px] text-white/90 font-bold mb-0.5 ml-0.5">{firstMsg.senderName}</span>
-                  )}
-                  <div className={`flex items-end gap-1 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+                  )}                  <div className={`flex items-end gap-1 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
                     <div
                       className={`grid gap-0.5 ${msgs.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}
                       style={{ maxWidth: msgs.length >= 2 ? 220 : 120 }}
@@ -618,7 +617,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
               )}
 
               <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[80%]`}>
-                {!isMe && (
+                {!isMe && room.isGroup && (
                   <span className="text-[9px] text-white/90 font-bold mb-0.5 ml-0.5">
                     {msg.senderName}
                   </span>
@@ -975,42 +974,47 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
         onSubmit={handleSendText}
         className="bg-white px-2 py-1.5 border-t border-slate-200 flex items-center gap-1.5 z-30 shrink-0 shadow-lg"
       >
-        {/* 1. Plus Button (+) */}
-        <button
-          type="button"
-          onClick={() => {
-            setShowPlusMenu(!showPlusMenu);
-            setShowStickerPicker(false);
-          }}
-          className={`p-2 rounded-full transition shrink-0 cursor-pointer ${
-            showPlusMenu ? 'bg-slate-200 text-slate-900' : 'text-slate-500 hover:bg-slate-100'
-          }`}
-          title="プラスメニュー (+)"
-        >
-          <Plus className="w-5 h-5" />
-        </button>
+        {/* テキスト入力中はアイコンを非表示にして横幅いっぱいに入力欄を展開 */}
+        {!inputText.trim() && (
+          <>
+            {/* 1. Plus Button (+) */}
+            <button
+              type="button"
+              onClick={() => {
+                setShowPlusMenu(!showPlusMenu);
+                setShowStickerPicker(false);
+              }}
+              className={`p-2 rounded-full transition shrink-0 cursor-pointer ${
+                showPlusMenu ? 'bg-slate-200 text-slate-900' : 'text-slate-500 hover:bg-slate-100'
+              }`}
+              title="プラスメニュー (+)"
+            >
+              <Plus className="w-5 h-5" />
+            </button>
 
-        {/* 2. Camera Button (📷) */}
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          className="p-2 rounded-full text-slate-500 hover:bg-slate-100 transition shrink-0 cursor-pointer"
-          title="カメラ・写真選択"
-        >
-          <Camera className="w-5 h-5" />
-        </button>
+            {/* 2. Camera Button */}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="p-2 rounded-full text-slate-500 hover:bg-slate-100 transition shrink-0 cursor-pointer"
+              title="カメラ・写真選択"
+            >
+              <Camera className="w-5 h-5" />
+            </button>
 
-        {/* 3. Gallery Button (🖼️) */}
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          className="p-2 rounded-full text-slate-500 hover:bg-slate-100 transition shrink-0 cursor-pointer"
-          title="ギャラリー"
-        >
-          <ImageIcon className="w-5 h-5" />
-        </button>
+            {/* 3. Gallery Button */}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="p-2 rounded-full text-slate-500 hover:bg-slate-100 transition shrink-0 cursor-pointer"
+              title="ギャラリー"
+            >
+              <ImageIcon className="w-5 h-5" />
+            </button>
+          </>
+        )}
 
-        {/* 4. Rounded Text Input Pill containing Sticker Smile Button inside right */}
+        {/* 4. Text Input (expands to full width when typing) */}
         <div className="flex-1 relative min-w-0 flex items-center">
           <input
             type="text"
@@ -1019,7 +1023,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
             placeholder="メッセージを入力..."
             className="w-full bg-slate-100 border border-slate-200 focus:border-[#00c300] focus:bg-white rounded-full pl-3.5 pr-10 py-2 text-xs sm:text-sm text-slate-900 font-medium placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#00c300]/20 transition"
           />
-          {/* Inside right Sticker button (😊) */}
+          {/* Inside right Sticker button */}
           <button
             type="button"
             onClick={() => {
@@ -1035,7 +1039,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
           </button>
         </div>
 
-        {/* 5. Right Action Button: Mic icon when empty, Send arrow (➢) when text exists */}
+        {/* 5. Right Action: Mic when empty, Send when typing */}
         {inputText.trim() ? (
           <button
             type="submit"
