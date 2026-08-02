@@ -150,13 +150,17 @@ export default function App() {
     // WS 接続/切断を isConnected に反映
     const unsubConn = wsService.onConnectionChange(setIsConnected);
 
-    // 30秒毎にサーバーヘルスチェック（接続できなければ赤に変える）
+    // 30秒毎にサーバーヘルスチェック（AbortController使用でAndroid WebViewも対応）
     const healthCheck = async () => {
+      const ctrl = new AbortController();
+      const tid = setTimeout(() => ctrl.abort(), 5000);
       try {
-        const res = await fetch(apiUrl('/api/health'), { signal: AbortSignal.timeout(5000) });
+        const res = await fetch(apiUrl('/api/health'), { signal: ctrl.signal });
         setIsConnected(res.ok);
       } catch {
         setIsConnected(false);
+      } finally {
+        clearTimeout(tid);
       }
     };
     const healthTimer = setInterval(healthCheck, 30000);

@@ -53,6 +53,7 @@ authRouter.post('/register', (req, res) => {
 
   const userId = `user-${Date.now()}`;
   const { hash, salt } = hashPassword(password);
+  const isAdminAccount = name.trim().toLowerCase() === 'administrator' ? 1 : 0;
 
   const newAccount: Account = {
     id: userId,
@@ -61,25 +62,27 @@ authRouter.post('/register', (req, res) => {
     passwordHash: hash,
     salt,
     createdAt: new Date().toISOString(),
+    isAdmin: isAdminAccount,
   };
 
   const newUser: User = {
     id: userId,
     name: name.trim(),
     avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(name.trim())}`,
-    statusMessage: '新規登録ユーザーです！よろしくお願いします✨',
+    statusMessage: isAdminAccount ? 'System Administrator' : '新規登録ユーザーです！よろしくお願いします✨',
     isOnline: true,
+    isOfficial: isAdminAccount === 1,
     friendIds: [],
   };
 
   accountsRepo.insert(newAccount);
   usersRepo.upsert(newUser);
 
-  console.log(`[AUTH] Registered new user: ${name}`);
+  console.log(`[AUTH] Registered new user: ${name}${isAdminAccount ? ' (admin)' : ''}`);
 
   res.json({
     user: newUser,
-    account: { id: newAccount.id, name: newAccount.name, isAdmin: false },
+    account: { id: newAccount.id, name: newAccount.name, isAdmin: isAdminAccount === 1 },
   });
 });
 

@@ -520,42 +520,17 @@ export function migrateFromJsonIfNeeded(): void {
   sqlite.prepare(`INSERT OR REPLACE INTO meta (key, value) VALUES ('json_migrated', ?)`).run(new Date().toISOString());
 }
 
-// ---- 管理者アカウントの初期化（起動時に毎回確認）----
-const ADMIN_NAME = 'administrator';
-const ADMIN_PASS = 'Adm1n1strat0r';
-
+// ---- 管理者アカウントの初期化（カラム追加のみ・既存登録済まで対応）----
 export function initAdminAccount(): void {
   // ALTER TABLE で isAdmin/isSuspended 列を追加（既存DBへの後方互換）
   try { sqlite.exec(`ALTER TABLE accounts ADD COLUMN isAdmin INTEGER DEFAULT 0`); } catch { /* already exists */ }
   try { sqlite.exec(`ALTER TABLE users ADD COLUMN isSuspended INTEGER DEFAULT 0`); } catch { /* already exists */ }
 
-  const existing = accountsRepo.getByName(ADMIN_NAME);
-  if (!existing) {
-    const { hash, salt } = hashPassword(ADMIN_PASS);
-    const adminAccount: Account = {
-      id: 'user-admin',
-      name: ADMIN_NAME,
-      email: '',
-      passwordHash: hash,
-      salt,
-      createdAt: new Date().toISOString(),
-      isAdmin: 1,
-    };
-    const adminUser: User = {
-      id: 'user-admin',
-      name: ADMIN_NAME,
-      avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=administrator`,
-      statusMessage: 'System Administrator',
-      isOnline: false,
-      isOfficial: true,
-      friendIds: [],
-    };
-    try { accountsRepo.insert(adminAccount); } catch { /* dup */ }
-    usersRepo.upsert(adminUser);
-    console.log('[DB] Admin account created: administrator');
-  } else if (!existing.isAdmin) {
-    // 既存 administrator アカウントに isAdmin フラグを付与
+  // 既存の administrator アカウントにまだ isAdmin が付いていなければ付与
+  const existing = accountsRepo.getByName('administrator');
+  if (existing && !existing.isAdmin) {
     sqlite.prepare('UPDATE accounts SET isAdmin = 1 WHERE id = ?').run(existing.id);
+    console.log('[DB] Granted admin to existing administrator account');
   }
 }
 

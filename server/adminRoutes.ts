@@ -48,11 +48,10 @@ adminRouter.post('/users/:id/unsuspend', (req, res) => {
 // アカウント削除（ユーザー・アカウント・関連データを全削除）
 adminRouter.delete('/users/:id', (req, res) => {
   const id = req.params.id;
+  // adminId は body または query から取得（ミドルウェアのチェック済み）
   if (accountsRepo.isAdmin(id)) {
     return res.status(400).json({ error: '管理者アカウントは削除できません。' });
   }
-  // アルバムのファイルは albumsRepo.forOwner で取得してから削除するが
-  // ここでは DB エントリのみ削除（ファイルは定期クリーンアップに委ねる）
   accountsRepo.delete(id);
   usersRepo.delete(id);
   res.json({ success: true });
