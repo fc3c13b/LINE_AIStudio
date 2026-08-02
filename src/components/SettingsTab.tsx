@@ -457,7 +457,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
 
         {/* バージョン表示 */}
         <div className="text-center py-3 text-[10px] text-slate-400 font-mono">
-          LINE AIStudio v0.5.13
+          LINE AIStudio v0.6.0
         </div>
       </div>
     </div>

@@ -10,6 +10,7 @@ import { SettingsTab, DEFAULT_CHAT_SETTINGS, ChatSettings } from './components/S
 import { AlbumTab } from './components/AlbumTab';
 import { MusicTab } from './components/MusicTab';
 import { LockScreen } from './components/LockScreen';
+import { SolitaireGame } from './components/SolitaireGame';
 import { UnauthenticatedGuard } from './components/UnauthenticatedGuard';
 import { ModalsContainer } from './components/ModalsContainer';
 import { Home, MessageSquare, Images, Music, Settings as SettingsIcon } from 'lucide-react';
@@ -67,12 +68,15 @@ export default function App() {
 
   // Screen lock state
   const [isAppLocked, setIsAppLocked] = useState(false);
+  const [appMode, setAppMode] = useState<'solitaire' | 'line'>('solitaire');
+
+  const lockToSolitaire = () => { setIsAppLocked(true); setAppMode('solitaire'); };
 
   // Lock screen when page/tab is hidden
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.hidden && account) {
-        setIsAppLocked(true);
+        lockToSolitaire();
       }
     };
 
@@ -632,6 +636,14 @@ export default function App() {
   const totalUnread = rooms.reduce((acc, r) => acc + (r.unreadCount || 0), 0);
   const currentRoom = rooms.find((r) => r.id === activeRoomId);
 
+  if (appMode === 'solitaire') {
+    return (
+      <SmartphoneFrame isConnected={isConnected}>
+        <SolitaireGame onSecretCode={() => setAppMode('line')} />
+      </SmartphoneFrame>
+    );
+  }
+
   return (
     <SmartphoneFrame isConnected={isConnected}>
       {!account ? (
@@ -747,7 +759,7 @@ export default function App() {
                 setAuthModalState({ isOpen: true, mode })
               }
               onLogout={handleLogout}
-              onLockApp={() => setIsAppLocked(true)}
+              onLockApp={lockToSolitaire}
               isConnected={isConnected}
               onGoHome={() => setActiveTab('home')}
             />
