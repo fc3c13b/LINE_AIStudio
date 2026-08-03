@@ -9,9 +9,8 @@ import { ChatRoom as ChatRoomComponent } from './components/ChatRoom';
 import { SettingsTab, DEFAULT_CHAT_SETTINGS, ChatSettings } from './components/SettingsTab';
 import { AlbumTab } from './components/AlbumTab';
 import { MusicTab } from './components/MusicTab';
-import { LockScreen } from './components/LockScreen';
-import { SolitaireGame } from './components/SolitaireGame';
 import { UnauthenticatedGuard } from './components/UnauthenticatedGuard';
+import { SolitaireGame } from './components/SolitaireGame';
 import { ModalsContainer } from './components/ModalsContainer';
 import { Home, MessageSquare, Images, Music, Settings as SettingsIcon } from 'lucide-react';
 import { loadAllCachedMessages, cacheRoomMessages, clearMessageCache } from './services/messageCache';
@@ -79,12 +78,11 @@ export default function App() {
     }
   });
 
-  // Screen lock state
-  const [isAppLocked, setIsAppLocked] = useState(false);
   const [appMode, setAppMode] = useState<'solitaire' | 'line'>('solitaire');
   const [showSolitaire, setShowSolitaire] = useState(false);
 
-  const lockToSolitaire = () => { setIsAppLocked(true); setAppMode('solitaire'); };
+  // 背面移動時はソリティア画面へ（パスワードロックなし）
+  const lockToSolitaire = () => setAppMode('solitaire');
 
   // Lock screen when page/tab is hidden
   useEffect(() => {
@@ -116,7 +114,6 @@ export default function App() {
       localStorage.setItem('line_app_account', JSON.stringify(accountInfo));
     }
     setActiveUserId(user.id);
-    setIsAppLocked(false);
     wsService.identify(user.id);
     fetchData();
   };
@@ -125,7 +122,6 @@ export default function App() {
     setAccount(null);
     localStorage.removeItem('line_app_account');
     setActiveUserId('user-me');
-    setIsAppLocked(false);
     setFriendRequests({ incoming: [], outgoing: [] });
     setRoomMessages({});
     clearMessageCache();
@@ -668,13 +664,6 @@ export default function App() {
         /* 未ログイン時のガード画面 */
         <UnauthenticatedGuard
           onOpenAuthModal={(mode) => setAuthModalState({ isOpen: true, mode })}
-        />
-      ) : isAppLocked ? (
-        /* 画面ロック時のパスワード解除画面 */
-        <LockScreen
-          user={me}
-          account={account}
-          onUnlock={() => setIsAppLocked(false)}
         />
       ) : showSolitaire ? (
         <SolitaireGame onSecretCode={() => {}} onClose={() => setShowSolitaire(false)} />
