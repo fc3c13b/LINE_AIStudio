@@ -54,6 +54,17 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 // 1日キャッシュ + ETTag で画像・音楽の再ダウンロードを防止
 app.use('/uploads', express.static(UPLOADS_DIR, { maxAge: '1d', etag: true }));
 
+// アプリアイコン（Viteビルドに含まれるが念のためExpressでも配信）
+app.get('/iconimage.jpg', (req, res) => {
+  const iconPath = path.join(process.cwd(), 'Iconimage.jpg');
+  if (fs.existsSync(iconPath)) {
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.sendFile(iconPath);
+  } else {
+    res.status(404).end();
+  }
+});
+
 const server = http.createServer(app);
 
 // WebSocket Server
