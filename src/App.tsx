@@ -130,6 +130,7 @@ export default function App() {
     }
     setActiveUserId(user.id);
     wsService.identify(user.id);
+    setAdminDebugLog([]);
     fetchData();
   };
 
@@ -140,6 +141,7 @@ export default function App() {
     setFriendRequests({ incoming: [], outgoing: [] });
     setRoomMessages({});
     clearMessageCache();
+    setAdminDebugLog([]);
   };
 
   // 1. Initial REST fetch
