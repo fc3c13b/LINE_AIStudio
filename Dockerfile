@@ -22,6 +22,8 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV PORT=3000
+# OpenSSL 3.x ではDESが無効のため @marsaud/smb2 のNTLM認証(LMハッシュ)に必要
+ENV NODE_OPTIONS=--openssl-legacy-provider
 
 # Copy package files
 COPY package*.json ./
