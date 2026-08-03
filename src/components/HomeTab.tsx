@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { User, ChatRoom, FriendRequest } from '../types';
+import { apiUrl } from '../services/api';
 import { Search, UserPlus, Users, ChevronRight, MessageSquare, Settings, UserX, Check, X, Clock, Bell, Shield } from 'lucide-react';
 
 interface HomeTabProps {
@@ -19,6 +20,7 @@ interface HomeTabProps {
   onCancelFriendRequest?: (requestId: string) => void;
   onOpenSolitaire?: () => void;
   isAdmin?: boolean;
+  onRefreshUsers?: () => void;
 }
 
 export const HomeTab: React.FC<HomeTabProps> = ({
@@ -38,7 +40,31 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   onCancelFriendRequest,
   onOpenSolitaire,
   isAdmin = false,
+  onRefreshUsers,
 }) => {
+  const [adminConfirm, setAdminConfirm] = useState<{ user: User; action: 'suspend' | 'unsuspend' | 'delete' } | null>(null);
+  const [adminLoading, setAdminLoading] = useState(false);
+
+  const handleAdminAction = async (targetUser: User, action: 'suspend' | 'unsuspend' | 'delete') => {
+    setAdminLoading(true);
+    try {
+      const adminId = currentUser.id;
+      if (action === 'delete') {
+        await fetch(apiUrl(`/api/admin/users/${targetUser.id}?adminId=${adminId}`), { method: 'DELETE' });
+      } else {
+        await fetch(apiUrl(`/api/admin/users/${targetUser.id}/${action}?adminId=${adminId}`), {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ adminId }),
+        });
+      }
+      onRefreshUsers?.();
+    } catch (err) {
+      console.error('[ADMIN]', action, err);
+    } finally {
+      setAdminLoading(false);
+      setAdminConfirm(null);
+    }
+  };
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddFriendModalOpen, setIsAddFriendModalOpen] = useState(false);
   const [friendSearchQuery, setFriendSearchQuery] = useState('');
@@ -471,7 +497,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
             </div>
             <div className="bg-white rounded-2xl border border-purple-200 divide-y divide-slate-100 overflow-hidden shadow-sm">
               {users.filter(u => u.id !== currentUser.id).map((u) => (
-                <div key={u.id} className="p-3 flex items-center gap-3">
+                <div key={u.id} className="p-3 flex items-center gap-2">
                   <div className="relative shrink-0">
                     <img src={u.avatar} alt={u.name} className="w-10 h-10 rounded-full object-cover border border-slate-200" />
                     {u.isOnline && <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full" />}
@@ -479,24 +505,72 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="font-bold text-slate-900 text-xs truncate">{u.name}</span>
-                      {(u as any).isAdmin && (
-                        <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 text-[9px] font-bold rounded">管理者</span>
-                      )}
-                      {u.isSuspended && (
-                        <span className="px-1.5 py-0.5 bg-red-100 text-red-700 text-[9px] font-bold rounded">停止中</span>
-                      )}
-                      {userFriendIds.includes(u.id) && (
-                        <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-700 text-[9px] font-bold rounded">友達</span>
-                      )}
+                      {(u as any).isAdmin && <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 text-[9px] font-bold rounded">管理者</span>}
+                      {u.isSuspended && <span className="px-1.5 py-0.5 bg-red-100 text-red-700 text-[9px] font-bold rounded">停止中</span>}
+                      {userFriendIds.includes(u.id) && <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-700 text-[9px] font-bold rounded">友達</span>}
                     </div>
                     <div className="text-[10px] text-slate-400 truncate mt-0.5">{u.statusMessage || 'ステータスなし'}</div>
                   </div>
-                  <div className="text-[10px] text-slate-400 shrink-0">{u.isOnline ? 'オンライン' : 'オフライン'}</div>
+                  {/* 管理者アクションボタン（管理者アカウントには表示しない） */}
+                  {!(u as any).isAdmin && (
+                    <div className="flex gap-1 shrink-0">
+                      {u.isSuspended ? (
+                        <button onClick={() => setAdminConfirm({ user: u, action: 'unsuspend' })}
+                          className="px-2 py-1 bg-emerald-500 text-white text-[9px] font-bold rounded-lg hover:bg-emerald-600 transition">
+                          解除
+                        </button>
+                      ) : (
+                        <button onClick={() => setAdminConfirm({ user: u, action: 'suspend' })}
+                          className="px-2 py-1 bg-amber-500 text-white text-[9px] font-bold rounded-lg hover:bg-amber-600 transition">
+                          停止
+                        </button>
+                      )}
+                      <button onClick={() => setAdminConfirm({ user: u, action: 'delete' })}
+                        className="px-2 py-1 bg-red-500 text-white text-[9px] font-bold rounded-lg hover:bg-red-600 transition">
+                        削除
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
               {users.filter(u => u.id !== currentUser.id).length === 0 && (
                 <div className="p-6 text-center text-xs text-slate-400">登録ユーザーなし</div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* 管理者アクション確認モーダル */}
+        {adminConfirm && (
+          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-in fade-in">
+            <div className="bg-white rounded-2xl p-5 w-full max-w-xs shadow-2xl space-y-4">
+              <div className="text-sm font-bold text-slate-900">
+                {adminConfirm.action === 'suspend' && `「${adminConfirm.user.name}」を一時利用停止しますか？`}
+                {adminConfirm.action === 'unsuspend' && `「${adminConfirm.user.name}」の利用停止を解除しますか？`}
+                {adminConfirm.action === 'delete' && `「${adminConfirm.user.name}」のアカウントを完全削除しますか？`}
+              </div>
+              {adminConfirm.action === 'suspend' && (
+                <p className="text-xs text-slate-500">強制ログアウトされ、再ログインできなくなります。同一名での新規作成も不可です。</p>
+              )}
+              {adminConfirm.action === 'delete' && (
+                <p className="text-xs text-red-500">アカウントデータがすべて削除されます。この操作は取り消せません。</p>
+              )}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleAdminAction(adminConfirm.user, adminConfirm.action)}
+                  disabled={adminLoading}
+                  className={`flex-1 py-2 text-white font-bold text-xs rounded-xl transition disabled:opacity-50 ${
+                    adminConfirm.action === 'delete' ? 'bg-red-500 hover:bg-red-600' :
+                    adminConfirm.action === 'suspend' ? 'bg-amber-500 hover:bg-amber-600' : 'bg-emerald-500 hover:bg-emerald-600'
+                  }`}
+                >
+                  {adminLoading ? '処理中...' : adminConfirm.action === 'suspend' ? '停止する' : adminConfirm.action === 'unsuspend' ? '解除する' : '削除する'}
+                </button>
+                <button onClick={() => setAdminConfirm(null)}
+                  className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition">
+                  キャンセル
+                </button>
+              </div>
             </div>
           </div>
         )}
