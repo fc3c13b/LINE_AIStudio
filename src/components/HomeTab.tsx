@@ -93,11 +93,11 @@ export const HomeTab: React.FC<HomeTabProps> = ({
     (u) => u.id !== currentUser.id && !u.isOfficial && !userFriendIds.includes(u.id)
   );
 
-  // 検索ボタン押下時のみ完全一致で検索
+  // 検索ボタン押下時のみ完全一致で検索（大文字・小文字を区別）
   const handleFriendSearch = () => {
-    const q = friendSearchQuery.trim().toLowerCase();
+    const q = friendSearchQuery.trim();
     if (!q) { setFriendSearchResult([]); return; }
-    const result = nonFriends.filter((u) => u.name.toLowerCase() === q);
+    const result = nonFriends.filter((u) => u.name === q);
     setFriendSearchResult(result);
   };
 

@@ -248,8 +248,8 @@ export const usersRepo = {
 // ---- Accounts ----
 export const accountsRepo = {
   getByName(name: string): Account | undefined {
-    const normalized = name.trim().toLocaleLowerCase();
-    return sqlite.prepare('SELECT * FROM accounts WHERE lower(trim(name)) = ?').get(normalized) as Account | undefined;
+    const trimmed = name.trim();
+    return sqlite.prepare('SELECT * FROM accounts WHERE trim(name) = ?').get(trimmed) as Account | undefined;
   },
   getById(id: string): Account | undefined {
     return sqlite.prepare('SELECT * FROM accounts WHERE id = ?').get(id) as Account | undefined;
