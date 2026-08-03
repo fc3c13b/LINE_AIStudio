@@ -716,6 +716,7 @@ export default function App() {
               onRejectFriendRequest={handleRejectFriendRequest}
               onCancelFriendRequest={handleCancelFriendRequest}
               onOpenSolitaire={() => setShowSolitaire(true)}
+              isAdmin={!!account?.isAdmin}
             />
           )}
 

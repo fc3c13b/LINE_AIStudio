@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { User, ChatRoom, FriendRequest } from '../types';
-import { Search, UserPlus, Users, ChevronRight, MessageSquare, Settings, UserX, Check, X, Clock, Bell } from 'lucide-react';
+import { Search, UserPlus, Users, ChevronRight, MessageSquare, Settings, UserX, Check, X, Clock, Bell, Shield } from 'lucide-react';
 
 interface HomeTabProps {
   currentUser: User;
@@ -18,6 +18,7 @@ interface HomeTabProps {
   onRejectFriendRequest?: (requestId: string) => void;
   onCancelFriendRequest?: (requestId: string) => void;
   onOpenSolitaire?: () => void;
+  isAdmin?: boolean;
 }
 
 export const HomeTab: React.FC<HomeTabProps> = ({
@@ -36,6 +37,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   onRejectFriendRequest,
   onCancelFriendRequest,
   onOpenSolitaire,
+  isAdmin = false,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddFriendModalOpen, setIsAddFriendModalOpen] = useState(false);
@@ -456,6 +458,45 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                   解除する
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* 管理者用: 全ユーザー一覧 */}
+        {isAdmin && isLoggedIn && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-purple-700 px-1">
+              <Shield className="w-3.5 h-3.5" />
+              <span>管理者ビュー · 全ユーザー ({users.filter(u => u.id !== currentUser.id).length}人)</span>
+            </div>
+            <div className="bg-white rounded-2xl border border-purple-200 divide-y divide-slate-100 overflow-hidden shadow-sm">
+              {users.filter(u => u.id !== currentUser.id).map((u) => (
+                <div key={u.id} className="p-3 flex items-center gap-3">
+                  <div className="relative shrink-0">
+                    <img src={u.avatar} alt={u.name} className="w-10 h-10 rounded-full object-cover border border-slate-200" />
+                    {u.isOnline && <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full" />}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-bold text-slate-900 text-xs truncate">{u.name}</span>
+                      {(u as any).isAdmin && (
+                        <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 text-[9px] font-bold rounded">管理者</span>
+                      )}
+                      {u.isSuspended && (
+                        <span className="px-1.5 py-0.5 bg-red-100 text-red-700 text-[9px] font-bold rounded">停止中</span>
+                      )}
+                      {userFriendIds.includes(u.id) && (
+                        <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-700 text-[9px] font-bold rounded">友達</span>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-slate-400 truncate mt-0.5">{u.statusMessage || 'ステータスなし'}</div>
+                  </div>
+                  <div className="text-[10px] text-slate-400 shrink-0">{u.isOnline ? 'オンライン' : 'オフライン'}</div>
+                </div>
+              ))}
+              {users.filter(u => u.id !== currentUser.id).length === 0 && (
+                <div className="p-6 text-center text-xs text-slate-400">登録ユーザーなし</div>
+              )}
             </div>
           </div>
         )}
