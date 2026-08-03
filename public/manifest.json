@@ -1,16 +1,11 @@
 {
-  "short_name": "ソリティア",
-  "name": "ソリティア",
+  "short_name": "ソリティアP",
+  "name": "ソリティアプレーヤー",
   "icons": [
     {
-      "src": "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=192&auto=format&fit=crop&q=80",
-      "type": "image/jpeg",
-      "sizes": "192x192"
-    },
-    {
-      "src": "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=512&auto=format&fit=crop&q=80",
-      "type": "image/jpeg",
-      "sizes": "512x512"
+      "src": "/solitaire-icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any"
     }
   ],
   "start_url": "/",
