@@ -97,22 +97,12 @@ export default function App() {
   const lockToSolitaire = () => setAppMode('solitaire');
   const lockTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
-  // ファイルピッカー等の一時的な非表示と本当のバックグラウンド移行を区別するため 3秒遅延
+  // 画面オフ復帰・アイコンタップ復帰ともに即座にソリティアへ
   useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.hidden && account) {
-        lockTimerRef.current = setTimeout(() => lockToSolitaire(), 3000);
-      } else {
-        clearTimeout(lockTimerRef.current);
-      }
-    };
-
+    const handleVisibilityChange = () => setAppMode('solitaire');
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      clearTimeout(lockTimerRef.current);
-    };
-  }, [account]);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
 
   const [activeUserId, setActiveUserId] = useState<string>(() => account?.id || 'user-me');
 
