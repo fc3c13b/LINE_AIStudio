@@ -473,6 +473,13 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
     }
   }
 
+  // 1対1チャットのヘッダーには相手のアバター・名前を表示
+  const partner = !room.isGroup
+    ? (room.members.find(m => m.id !== currentUser.id) ?? room.members[0])
+    : null;
+  const headerName = partner ? partner.name : room.name;
+  const headerAvatar = partner ? partner.avatar : room.avatar;
+
   return (
     <div className="flex-1 flex flex-col bg-[#7494c0] overflow-hidden relative font-sans h-full w-full min-h-0">
       {/* Official LINE Style Chat Room Header */}
@@ -487,13 +494,13 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
           </button>
           <div className="flex items-center gap-2.5">
             <img
-              src={room.avatar}
-              alt={room.name}
+              src={headerAvatar}
+              alt={headerName}
               className="w-9 h-9 rounded-full object-cover border border-white/30 shadow-xs"
             />
             <div>
               <div className="flex items-center gap-1.5">
-                <h1 className="font-bold text-sm sm:text-base tracking-tight leading-none text-white">{room.name}</h1>
+                <h1 className="font-bold text-sm sm:text-base tracking-tight leading-none text-white">{headerName}</h1>
                 {isAiRoom && <Sparkles className="w-3.5 h-3.5 text-amber-200" />}
               </div>
               <p className="text-[10px] text-white/80 mt-0.5 font-medium">
