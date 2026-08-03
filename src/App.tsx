@@ -162,6 +162,22 @@ export default function App() {
       if (account?.id) {
         fetchFriendRequests(account.id);
       }
+
+      // 管理者権限をサーバーに問い合わせて確認・更新（旧セッション・旧APK対応）
+      if (account?.id && !account.isAdmin) {
+        fetch(apiUrl(`/api/admin/users?adminId=${encodeURIComponent(account.id)}`))
+          .then(res => {
+            if (res.ok) {
+              setAccount(prev => {
+                if (!prev || prev.isAdmin) return prev;
+                const updated = { ...prev, isAdmin: true };
+                localStorage.setItem('line_app_account', JSON.stringify(updated));
+                return updated;
+              });
+            }
+          })
+          .catch(() => {});
+      }
     } catch (err) {
       console.error('Error fetching initial REST data:', err);
     }
