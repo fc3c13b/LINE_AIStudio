@@ -21,7 +21,7 @@ function deleteUploadedFile(url: string) {
 }
 
 // アルバム一覧取得（自分 + 指定友達）
-albumsRouter.get('/albums', (req, res) => {
+albumRouter.get('/albums', (req, res) => {
   const userId = req.query.userId as string;
   if (!userId) {
     return res.status(400).json({ error: 'userId を指定してください。' });
