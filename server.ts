@@ -324,7 +324,7 @@ const ALLOWED_UPLOAD_MIME: Record<string, string> = {
 };
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024; // 50MB
 
-app.post('/api/upload', (req, res) => {
+app.post('/api/upload', async (req, res) => {
   try {
     const { fileName, dataUrl, userId } = req.body;
     if (!dataUrl) {
@@ -365,6 +365,31 @@ app.post('/api/upload', (req, res) => {
 
     const fileUrl = safeUserId ? `/uploads/${safeUserId}/${fileId}` : `/uploads/${fileId}`;
     console.log(`[UPLOAD] File saved to server: ${filePath} -> ${fileUrl}`);
+
+    // 画像の場合はチャット表示用サムネイルを自動生成（純粋JSのjimpを使用）
+    const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif']);
+    if (IMAGE_EXTS.has(ext)) {
+      try {
+        const JimpMod = require('jimp');
+        const Jimp = JimpMod.Jimp ?? JimpMod.default ?? JimpMod;
+        const image = await Jimp.read(filePath);
+        const MAX_THUMB = 480;
+        if (image.width > MAX_THUMB || image.height > MAX_THUMB) {
+          image.width > image.height
+            ? image.resize({ w: MAX_THUMB })
+            : image.resize({ h: MAX_THUMB });
+        }
+        const buf = await image.getBuffer('image/jpeg');
+        const thumbId = fileId.replace(/\.[^.]+$/, '-mini.jpg');
+        const thumbPath = path.join(targetDir, thumbId);
+        fs.writeFileSync(thumbPath, buf);
+        const thumbUrl = safeUserId ? `/uploads/${safeUserId}/${thumbId}` : `/uploads/${thumbId}`;
+        console.log(`[UPLOAD] Thumbnail generated: ${thumbUrl}`);
+        return res.json({ url: fileUrl, thumbUrl, fileName: fileName || fileId, mimeType });
+      } catch (thumbErr) {
+        console.warn('[UPLOAD] Thumbnail generation failed:', thumbErr);
+      }
+    }
 
     return res.json({ url: fileUrl, fileName: fileName || fileId, mimeType });
   } catch (err) {

@@ -212,7 +212,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
 
             if (res.ok) {
               const data = await res.json();
-              onSendMessage(isVideo ? 'video' : 'image', data.url, { fileName: file.name });
+              onSendMessage(isVideo ? 'video' : 'image', data.url, { fileName: file.name, thumbUrl: data.thumbUrl });
             } else {
               onSendMessage(isVideo ? 'video' : 'image', dataUrl, { fileName: file.name });
             }
@@ -635,7 +635,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
                           onTouchMove={cancelLongPress}
                           className="overflow-hidden rounded-md border border-black/10 cursor-pointer group"
                         >
-                          <img src={img.content} alt="画像" className="w-full h-auto object-cover max-h-28 group-hover:opacity-90 transition" />
+                          <img src={img.meta?.thumbUrl || img.content} alt="画像" className="w-full h-auto object-cover max-h-28 group-hover:opacity-90 transition" />
                         </div>
                       ))}
                     </div>
@@ -740,7 +740,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
                         style={{ maxWidth: chatSettings.maxPhotoHeight }}
                         title="タップして全画面表示"
                       >
-                        <img src={msg.content} alt="送信画像"
+                        <img src={msg.meta?.thumbUrl || msg.content} alt="送信画像"
                           style={{ maxHeight: chatSettings.maxPhotoHeight }}
                           className="w-full object-cover" />
                         <div className="absolute top-1.5 right-1.5 p-1 rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 transition backdrop-blur-xs">
