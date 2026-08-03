@@ -83,18 +83,22 @@ export default function App() {
 
   // 背面移動時はソリティア画面へ（パスワードロックなし）
   const lockToSolitaire = () => setAppMode('solitaire');
+  const lockTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
-  // Lock screen when page/tab is hidden
+  // ファイルピッカー等の一時的な非表示と本当のバックグラウンド移行を区別するため 3秒遅延
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.hidden && account) {
-        lockToSolitaire();
+        lockTimerRef.current = setTimeout(() => lockToSolitaire(), 3000);
+      } else {
+        clearTimeout(lockTimerRef.current);
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearTimeout(lockTimerRef.current);
     };
   }, [account]);
 
