@@ -50,10 +50,6 @@ export default function App() {
   const typingDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTypingSentRef = useRef<boolean>(false);
   const msgCacheTimerRef = useRef<ReturnType<typeof setTimeout>>();
-  // WS コールバック内で常に最新の accountId を参照するための ref（stale closure 対策）
-  const accountIdRef = useRef<string | undefined>(undefined);
-  useEffect(() => { accountIdRef.current = account?.id; }, [account]);
-
   // メッセージ変更時に2秒デバウンスでキャッシュ保存（10MB LRU管理）
   useEffect(() => {
     clearTimeout(msgCacheTimerRef.current);
@@ -89,6 +85,10 @@ export default function App() {
       return null;
     }
   });
+
+  // WS コールバック内で常に最新の accountId を参照するための ref（stale closure 対策）
+  const accountIdRef = useRef<string | undefined>(undefined);
+  useEffect(() => { accountIdRef.current = account?.id; }, [account]);
 
   const [appMode, setAppMode] = useState<'solitaire' | 'line'>('solitaire');
   const [showSolitaire, setShowSolitaire] = useState(false);
