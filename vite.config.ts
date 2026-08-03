@@ -1,7 +1,6 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import fs from 'fs';
 import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
@@ -12,21 +11,6 @@ export default defineConfig(() => {
     plugins: [
       react(),
       tailwindcss(),
-      // ルートのIconimage.jpgをビルド成果物と開発サーバーに含める
-      {
-        name: 'iconimage-asset',
-        configureServer(server: any) {
-          server.middlewares.use('/iconimage.jpg', (_req: any, res: any) => {
-            const p = path.resolve(__dirname, 'Iconimage.jpg');
-            if (fs.existsSync(p)) { res.setHeader('Content-Type', 'image/jpeg'); res.end(fs.readFileSync(p)); }
-            else res.writeHead(404).end();
-          });
-        },
-        generateBundle(this: any) {
-          const p = path.resolve(__dirname, 'Iconimage.jpg');
-          if (fs.existsSync(p)) this.emitFile({ type: 'asset', fileName: 'iconimage.jpg', source: fs.readFileSync(p) });
-        },
-      },
     ],
     resolve: {
       alias: {

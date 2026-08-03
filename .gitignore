@@ -7,6 +7,10 @@ coverage/
 .env*
 !.env.example
 
+# ライセンスに注意が必要な画像素材
+Iconimage.jpg
+public/iconimage.jpg
+
 # SQLite ランタイム生成物（データボリューム側で永続化）
 data/app.db
 data/app.db-shm
