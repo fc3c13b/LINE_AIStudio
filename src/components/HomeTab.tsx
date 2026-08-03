@@ -490,8 +490,8 @@ export const HomeTab: React.FC<HomeTabProps> = ({
           </div>
         )}
 
-        {/* デバッグパネル: ログイン中は常に表示（adminフロー確認用）*/}
-        {isLoggedIn && adminDebugLog.length > 0 && (
+        {/* デバッグパネル: admin かつログイン中のみ表示 */}
+        {isAdmin && isLoggedIn && adminDebugLog.length > 0 && (
           <div className="space-y-1">
             <div className="text-[10px] font-bold text-slate-400 px-1">DEBUG LOG</div>
             <div className="bg-slate-900 rounded-xl p-2.5 font-mono text-[10px] leading-relaxed max-h-48 overflow-y-auto">
