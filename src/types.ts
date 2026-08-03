@@ -10,7 +10,7 @@ export interface User {
   isSuspended?: boolean;
 }
 
-export type MessageType = 'text' | 'sticker' | 'image' | 'video' | 'voice' | 'system';
+export type MessageType = 'text' | 'sticker' | 'image' | 'video' | 'voice' | 'file' | 'system';
 
 // 引用リプライ元メッセージの要約情報
 export interface ReplyReference {

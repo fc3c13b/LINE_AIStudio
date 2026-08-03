@@ -36,6 +36,8 @@ import {
   Trash2,
   Scissors,
   ClipboardPaste,
+  FileText,
+  Download,
 } from 'lucide-react';
 
 interface ChatRoomProps {
@@ -112,6 +114,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileInputAllRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const prevScrollHeightRef = useRef<number>(0);
   const isNearBottomRef = useRef<boolean>(true);
@@ -231,6 +234,40 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
       reader.readAsDataURL(file);
     });
 
+    e.target.value = '';
+  };
+
+  const handleFileAllUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    setIsUploadingFile(true);
+    let remaining = files.length;
+    files.forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = async (evt) => {
+        if (evt.target?.result) {
+          const dataUrl = evt.target.result as string;
+          const isVideo = file.type.startsWith('video');
+          const isImage = file.type.startsWith('image');
+          try {
+            const res = await fetch(apiUrl('/api/upload'), {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ fileName: file.name, dataUrl }),
+            });
+            if (res.ok) {
+              const data = await res.json();
+              const t = isVideo ? 'video' : isImage ? 'image' : 'file';
+              onSendMessage(t, data.url, { fileName: file.name, thumbUrl: data.thumbUrl });
+            } else { onSendMessage('file', dataUrl, { fileName: file.name }); }
+          } catch { onSendMessage('file', dataUrl, { fileName: file.name }); }
+          finally {
+            remaining -= 1;
+            if (remaining <= 0) { setIsUploadingFile(false); setShowPlusMenu(false); }
+          }
+        }
+      };
+      reader.readAsDataURL(file);
+    });
     e.target.value = '';
   };
 
@@ -784,6 +821,50 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
                       </div>
                     )}
 
+                    {/* ファイルメッセージ */}
+                    {msg.type === 'file' && (
+                      <a
+                        href={msg.content}
+                        download={msg.meta?.fileName || 'file'}
+                        onClick={(e) => e.stopPropagation()}
+                        className={`flex items-center gap-2 py-1 min-w-[160px] max-w-[220px] rounded-lg hover:opacity-80 transition ${
+                          isMe ? 'text-slate-950' : 'text-slate-900'
+                        }`}
+                      >
+                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                          isMe ? 'bg-white/40' : 'bg-emerald-100'
+                        }`}>
+                          <FileText className={`w-5 h-5 ${isMe ? 'text-emerald-900' : 'text-emerald-700'}`} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-xs font-bold truncate">{msg.meta?.fileName || 'ファイル'}</div>
+                          <div className="text-[10px] opacity-60 flex items-center gap-1">
+                            <Download className="w-3 h-3" />タップでDL
+                          </div>
+                        </div>
+                      </a>
+                    )}
+
+                    {msg.type === 'voice' && (
+                      <div className="flex items-center gap-2 py-0.5 min-w-[120px]">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setPlayingVoiceId(playingVoiceId === msg.id ? null : msg.id); }}
+                          className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition ${
+                            isMe ? 'bg-white text-[#00c300]' : 'bg-[#00c300] text-white'
+                          }`}
+                        >
+                          {playingVoiceId === msg.id ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 ml-0.5" />}
+                        </button>
+                        <div>
+                          <div className="font-bold text-[11px] flex items-center gap-1">
+                            <Volume2 className="w-3 h-3" />
+                            <span>ボイス</span>
+                          </div>
+                          <div className="text-[10px] opacity-80">{msg.meta?.duration || 3}秒</div>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Reaction Badges */}
                     {reactionEntries.length > 0 && (
                       <div className="absolute -bottom-3 -right-1 flex items-center gap-0.5">
@@ -972,13 +1053,22 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
         </div>
       )}
 
-      {/* Hidden File Input for Image/Video Upload */}
+      {/* Hidden File Input for Image/Video Upload (camera button) */}
       <input
         type="file"
         ref={fileInputRef}
-        accept="image/*,video/*"
+        accept="image/*"
         multiple
         onChange={handleFileUpload}
+        className="hidden"
+      />
+      {/* Hidden File Input for general file upload */}
+      <input
+        type="file"
+        ref={fileInputAllRef}
+        accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.html,.htm,.csv,.md,.json,.zip"
+        multiple
+        onChange={handleFileAllUpload}
         className="hidden"
       />
 
@@ -994,11 +1084,11 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
           </button>
 
           <button
-            onClick={() => fileInputRef.current?.click()}
-            className="flex flex-col items-center justify-center gap-1 p-2.5 rounded-xl bg-slate-50 hover:bg-emerald-50 border border-slate-200 transition text-slate-800 cursor-pointer group"
+            onClick={() => fileInputAllRef.current?.click()}
+            className="flex flex-col items-center justify-center gap-1 p-2.5 rounded-xl bg-slate-50 hover:bg-blue-50 border border-slate-200 transition text-slate-800 cursor-pointer group"
           >
-            <ImageIcon className="w-5 h-5 text-blue-600 group-hover:scale-110 transition" />
-            <span className="text-[10px] font-bold">写真・動画</span>
+            <FileText className="w-5 h-5 text-blue-600 group-hover:scale-110 transition" />
+            <span className="text-[10px] font-bold">ファイル</span>
           </button>
 
           <button
@@ -1177,24 +1267,24 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
               <Plus className="w-5 h-5" />
             </button>
 
-            {/* 2. Camera Button */}
+            {/* 2. Camera Button (写真のみ) */}
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
               className="p-2 rounded-full text-slate-500 hover:bg-slate-100 transition shrink-0 cursor-pointer"
-              title="カメラ・写真選択"
+              title="写真撮影"
             >
               <Camera className="w-5 h-5" />
             </button>
 
-            {/* 3. Gallery Button */}
+            {/* 3. File Button (すべてのファイル) */}
             <button
               type="button"
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => fileInputAllRef.current?.click()}
               className="p-2 rounded-full text-slate-500 hover:bg-slate-100 transition shrink-0 cursor-pointer"
-              title="ギャラリー"
+              title="ファイル送信"
             >
-              <ImageIcon className="w-5 h-5" />
+              <FileText className="w-5 h-5" />
             </button>
           </>
         )}
