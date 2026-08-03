@@ -108,7 +108,7 @@ export interface MusicItem {
   createdAt: string;
 }
 
-export type TabType = 'home' | 'chats' | 'album' | 'music' | 'settings';
+export type TabType = 'home' | 'chats' | 'album' | 'music' | 'settings' | 'musicnet';
 
 export interface CallState {
   isActive: boolean;

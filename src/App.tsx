@@ -12,7 +12,8 @@ import { MusicTab } from './components/MusicTab';
 import { UnauthenticatedGuard } from './components/UnauthenticatedGuard';
 import { SolitaireGame } from './components/SolitaireGame';
 import { ModalsContainer } from './components/ModalsContainer';
-import { Home, MessageSquare, Images, Music, Settings as SettingsIcon } from 'lucide-react';
+import { Home, MessageSquare, Images, Music, Radio } from 'lucide-react';
+import { NetworkMusicTab } from './components/NetworkMusicTab';
 import { loadAllCachedMessages, cacheRoomMessages, clearMessageCache } from './services/messageCache';
 
 export default function App() {
@@ -799,6 +800,12 @@ export default function App() {
             />
           )}
 
+          {activeTab === 'musicnet' && (
+            <NetworkMusicTab
+              onGoHome={() => setActiveTab('home')}
+            />
+          )}
+
           {activeTab === 'settings' && (
             <SettingsTab
               currentUser={me}
@@ -870,13 +877,13 @@ export default function App() {
             </button>
 
             <button
-              onClick={() => setActiveTab('settings')}
+              onClick={() => setActiveTab('musicnet')}
               className={`flex flex-col items-center gap-1 flex-1 py-1 transition ${
-                activeTab === 'settings' ? 'text-emerald-600 font-bold' : 'text-slate-400 hover:text-slate-600'
+                activeTab === 'musicnet' ? 'text-[#00c300] font-bold' : 'text-slate-400 hover:text-slate-600'
               }`}
             >
-              <SettingsIcon className="w-5 h-5" />
-              <span className="text-[10px]">設定</span>
+              <Radio className="w-5 h-5" />
+              <span className="text-[10px]">音楽ネット</span>
             </button>
           </nav>
         </div>
