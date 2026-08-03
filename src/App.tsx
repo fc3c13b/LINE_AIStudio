@@ -639,11 +639,12 @@ export default function App() {
 
   return (
     <SmartphoneFrame isConnected={isConnected}>
-      {/* カバーモード: 常時マウントしてdisplay切替することで音楽再生を維持 */}
+      {/* カバーモード: display:noneはaudioを停止させるためvisibility制御に変更 */}
       <div style={{
         position: 'absolute', inset: 0, zIndex: 50,
-        display: appMode === 'solitaire' ? 'flex' : 'none',
-        flexDirection: 'column',
+        display: 'flex', flexDirection: 'column',
+        visibility: appMode === 'solitaire' ? 'visible' : 'hidden',
+        pointerEvents: appMode === 'solitaire' ? 'auto' : 'none',
       }}>
         <SolitaireGame onSecretCode={() => setAppMode('line')} />
       </div>

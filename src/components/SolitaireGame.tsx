@@ -350,13 +350,23 @@ export const SolitaireGame: React.FC<{ onSecretCode: () => void; onClose?: () =>
         border: `2px solid ${isSelected ? '#ffd700' : isHinted ? '#00e676' : '#ccc'}`,
         boxShadow: isSelected ? '0 0 8px #ffd700' : isHinted ? '0 0 8px #00e676' : '0 1px 3px rgba(0,0,0,.25)',
         color: red ? '#c62828' : '#1a1a1a',
-        display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
-        padding: '2px 3px', fontSize: 11, fontWeight: 700, lineHeight: 1.2,
+        position: 'relative',
         userSelect: 'none', ...extra,
       }}>
-        <div>{RNKS[card.rank]}<br />{SYM[card.suit]}</div>
-        <div style={{ fontSize: 20, textAlign: 'center', lineHeight: 1 }}>{SYM[card.suit]}</div>
-        <div style={{ transform: 'rotate(180deg)' }}>{RNKS[card.rank]}<br />{SYM[card.suit]}</div>
+        {/* 左上のランク+スート */}
+        <div style={{ position: 'absolute', top: 2, left: 3, fontSize: 15, fontWeight: 800, lineHeight: 1.0 }}>
+          {RNKS[card.rank]}
+          <div style={{ fontSize: 13, lineHeight: 1.0 }}>{SYM[card.suit]}</div>
+        </div>
+        {/* 中央スート */}
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>
+          {SYM[card.suit]}
+        </div>
+        {/* 右下のランク+スート（180度回転） */}
+        <div style={{ position: 'absolute', bottom: 2, right: 3, fontSize: 15, fontWeight: 800, lineHeight: 1.0, transform: 'rotate(180deg)' }}>
+          {RNKS[card.rank]}
+          <div style={{ fontSize: 13, lineHeight: 1.0 }}>{SYM[card.suit]}</div>
+        </div>
       </div>
     );
   };
