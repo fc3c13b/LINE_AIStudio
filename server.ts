@@ -11,6 +11,7 @@ import { authRouter } from './server/authRoutes';
 import { chatRouter } from './server/chatRoutes';
 import { albumRouter } from './server/albumRoutes';
 import { adminRouter } from './server/adminRoutes';
+import { musicRouter } from './server/musicRoutes';
 
 const PORT = 3000;
 
@@ -398,7 +399,6 @@ app.use('/api/auth', authRouter);
 app.use('/api', chatRouter);
 
 // Music SMB Routes
-import { musicRouter } from './server/musicRoutes';
 app.use('/api/music', musicRouter);
 
 // Album Routes

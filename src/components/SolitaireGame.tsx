@@ -135,12 +135,13 @@ export const SolitaireGame: React.FC<{ onSecretCode: () => void; onClose?: () =>
       const tail = seq.slice(-SECRET.length);
       if (tail.every((b, i) => b === SECRET[i])) {
         seqRef.current = [];
-        onSecretCode();
+        // オーバーレイ時は閉じる、カバー模時はLINE切り替え
+        if (onClose) onClose(); else onSecretCode();
         return;
       }
     }
     tmRef.current = setTimeout(() => { seqRef.current = []; }, 2000);
-  }, [onSecretCode]);
+  }, [onSecretCode, onClose]);
 
   const applyMove = useCallback((curGs: GS, s: Sel, destFn: (g: GS) => void) => {
     if (!s) return;
@@ -391,14 +392,6 @@ export const SolitaireGame: React.FC<{ onSecretCode: () => void; onClose?: () =>
     }}>
       {/* タイトルバー */}
       <div style={{ padding: '10px 12px 4px', display: 'flex', alignItems: 'center', gap: 6 }}>
-        {onClose && (
-          <button onClick={onClose} style={{
-            background: 'none', border: 'none', cursor: 'pointer', color: '#fff',
-            padding: '2px 4px 2px 0', display: 'flex', alignItems: 'center',
-          }}>
-            <ArrowLeft size={22} />
-          </button>
-        )}
         <span style={{ color: '#fff', fontWeight: 800, fontSize: 17 }}>♠ ソリティア</span>
         <div style={{ flex: 1 }} />
         {/* 裏面デザイン選択 */}
