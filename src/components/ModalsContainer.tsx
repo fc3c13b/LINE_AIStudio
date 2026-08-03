@@ -14,7 +14,7 @@ interface ModalsContainerProps {
   onEndCall: () => void;
   authModalState: { isOpen: boolean; mode: 'login' | 'register' | 'forgot' };
   onCloseAuthModal: () => void;
-  onAuthSuccess: (user: User, account: { id: string; name: string; email?: string }) => void;
+  onAuthSuccess: (user: User, account: { id: string; name: string; email?: string; isAdmin?: boolean }) => void;
 }
 
 export const ModalsContainer: React.FC<ModalsContainerProps> = ({

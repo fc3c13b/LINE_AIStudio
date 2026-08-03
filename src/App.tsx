@@ -72,7 +72,14 @@ export default function App() {
   const [account, setAccount] = useState<{ id: string; name: string; email?: string; isAdmin?: boolean } | null>(() => {
     try {
       const saved = localStorage.getItem('line_app_account');
-      return saved ? JSON.parse(saved) : null;
+      if (!saved) return null;
+      const parsed = JSON.parse(saved);
+      // キャッシュに isAdmin がない場合はユーザー名で補完（旧セッション対応）
+      if (parsed && !parsed.isAdmin && parsed.name?.toLowerCase() === 'administrator') {
+        parsed.isAdmin = true;
+        localStorage.setItem('line_app_account', JSON.stringify(parsed));
+      }
+      return parsed;
     } catch {
       return null;
     }
@@ -112,7 +119,7 @@ export default function App() {
     isOnline: true,
   };
 
-  const handleAuthSuccess = (user: User, accountInfo?: { id: string; name: string; email?: string }) => {
+  const handleAuthSuccess = (user: User, accountInfo?: { id: string; name: string; email?: string; isAdmin?: boolean }) => {
     if (accountInfo) {
       setAccount(accountInfo);
       localStorage.setItem('line_app_account', JSON.stringify(accountInfo));

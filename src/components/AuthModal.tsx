@@ -6,7 +6,7 @@ import { apiUrl, readApiResponse } from '../services/api';
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (user: User, accountInfo?: { id: string; name: string }) => void;
+  onSuccess: (user: User, accountInfo?: { id: string; name: string; isAdmin?: boolean }) => void;
   initialMode?: 'login' | 'register';
 }
 
