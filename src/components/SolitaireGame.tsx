@@ -24,8 +24,8 @@ const DESIGNS: { id: CardDesign; label: string; bg: string; dot: string }[] = [
   { id: 'green', label: '緑', bg: 'linear-gradient(135deg,#1b5e20,#2e7d32)', dot: '#43a047' },
 ];
 
-// 隠し操作: やり直す → ヒント → 1枚戻す の順に2秒以内に押すとLINEへ切り替わる
-const SECRET: BtnId[] = ['restart', 'hint', 'undo'];
+// 隠し操作: ヒント → 1枚戻す → ヒント の順に2秒以内に押すとLINEへ切り替わる
+const SECRET: BtnId[] = ['hint', 'undo', 'hint'];
 const CW = 46, CH = 64;
 
 interface SmbItem { name: string; path: string; isAudio: boolean; isDir: boolean; ext: string; }
