@@ -430,6 +430,11 @@ export const albumsRepo = {
   forOwner(ownerId: string): Album[] {
     return sqlite.prepare('SELECT * FROM albums WHERE ownerId = ? ORDER BY COALESCE(updatedAt, createdAt) DESC').all(ownerId).map(rowToAlbum);
   },
+  forOwners(ownerIds: string[]): Album[] {
+    if (ownerIds.length === 0) return [];
+    const placeholders = ownerIds.map(() => '?').join(',');
+    return sqlite.prepare(`SELECT * FROM albums WHERE ownerId IN (${placeholders}) ORDER BY COALESCE(updatedAt, createdAt) DESC`).all(...ownerIds).map(rowToAlbum);
+  },
   get(id: string): Album | undefined {
     const r = sqlite.prepare('SELECT * FROM albums WHERE id = ?').get(id);
     return r ? rowToAlbum(r) : undefined;

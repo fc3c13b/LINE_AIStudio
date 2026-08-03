@@ -83,9 +83,10 @@ interface AlbumTabProps {
   rooms?: import('../types').ChatRoom[];
   onSendToChat?: (roomId: string, text: string) => void;
   partnerUser?: import('../types').User | null;
+  friendIds?: string[];
 }
 
-export const AlbumTab: React.FC<AlbumTabProps> = ({ onOpenAuthModal, isLoggedIn = false, userId = null, onGoHome, rooms = [], onSendToChat, partnerUser = null }) => {
+export const AlbumTab: React.FC<AlbumTabProps> = ({ onOpenAuthModal, isLoggedIn = false, userId = null, onGoHome, rooms = [], onSendToChat, partnerUser = null, friendIds = [] }) => {
   const [albums, setAlbums] = useState<Album[]>([]); 
   const [isLoadingAlbums, setIsLoadingAlbums] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -129,7 +130,9 @@ export const AlbumTab: React.FC<AlbumTabProps> = ({ onOpenAuthModal, isLoggedIn 
   const fetchAlbums = async (uid: string) => {
     setIsLoadingAlbums(true);
     try {
-      const res = await fetch(apiUrl(`/api/albums?userId=${encodeURIComponent(uid)}`));
+      const params = new URLSearchParams({ userId: uid });
+      if (friendIds.length > 0) params.set('friendIds', friendIds.join(','));
+      const res = await fetch(apiUrl(`/api/albums?${params}`));
       if (res.ok) {
         const data: Album[] = await res.json();
         setAlbums(data);

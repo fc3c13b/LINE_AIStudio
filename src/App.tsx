@@ -778,6 +778,7 @@ export default function App() {
             <AlbumTab
               userId={account ? me.id : null}
               isLoggedIn={!!account}
+              friendIds={me.friendIds ?? []}
               onOpenAuthModal={() => setAuthModalState({ isOpen: true, mode: 'login' })}
               onGoHome={() => {
                 // チャットから開いた場合はチャットに戻る

@@ -20,13 +20,17 @@ function deleteUploadedFile(url: string) {
   });
 }
 
-// アルバム一覧取得（所有者ごと）
-albumRouter.get('/albums', (req, res) => {
+// アルバム一覧取得（自分 + 指定友達）
+albumsRouter.get('/albums', (req, res) => {
   const userId = req.query.userId as string;
   if (!userId) {
     return res.status(400).json({ error: 'userId を指定してください。' });
   }
-  res.json(albumsRepo.forOwner(userId));
+  const extra = typeof req.query.friendIds === 'string' && req.query.friendIds
+    ? req.query.friendIds.split(',').filter(Boolean)
+    : [];
+  const ownerIds = [...new Set([userId, ...extra])];
+  res.json(albumsRepo.forOwners(ownerIds));
 });
 
 // アルバム作成
