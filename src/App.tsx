@@ -637,16 +637,17 @@ export default function App() {
   const totalUnread = rooms.reduce((acc, r) => acc + (r.unreadCount || 0), 0);
   const currentRoom = rooms.find((r) => r.id === activeRoomId);
 
-  if (appMode === 'solitaire') {
-    return (
-      <SmartphoneFrame isConnected={isConnected}>
-        <SolitaireGame onSecretCode={() => setAppMode('line')} />
-      </SmartphoneFrame>
-    );
-  }
-
   return (
     <SmartphoneFrame isConnected={isConnected}>
+      {/* カバーモード: 常時マウントしてdisplay切替することで音楽再生を維持 */}
+      <div style={{
+        position: 'absolute', inset: 0, zIndex: 50,
+        display: appMode === 'solitaire' ? 'flex' : 'none',
+        flexDirection: 'column',
+      }}>
+        <SolitaireGame onSecretCode={() => setAppMode('line')} />
+      </div>
+
       {!account ? (
         /* 未ログイン時のガード画面 */
         <UnauthenticatedGuard
