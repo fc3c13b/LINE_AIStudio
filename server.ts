@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
+import compression from 'compression';
 import http from 'http';
 import path from 'path';
 import fs from 'fs';
@@ -42,13 +43,16 @@ app.use((req, res, next) => {
 });
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+// JSON/テキストAPIレスポンスをgzip圧縮（通信量60〜80%削減）
+app.use(compression());
 
 // Uploads directory static serving
 const UPLOADS_DIR = path.join(process.cwd(), 'uploads');
 if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
-app.use('/uploads', express.static(UPLOADS_DIR));
+// 1日キャッシュ + ETTag で画像・音楽の再ダウンロードを防止
+app.use('/uploads', express.static(UPLOADS_DIR, { maxAge: '1d', etag: true }));
 
 const server = http.createServer(app);
 

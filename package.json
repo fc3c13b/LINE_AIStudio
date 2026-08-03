@@ -1,7 +1,7 @@
 {
   "name": "react-example",
   "private": true,
-  "version": "0.6.9",
+  "version": "0.7.0",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
@@ -15,6 +15,7 @@
   "dependencies": {
     "@google/genai": "^2.4.0",
     "@marsaud/smb2": "^0.18.0",
+    "compression": "^1.7.5",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
     "ws": "^8.21.1"
@@ -25,6 +26,7 @@
     "@capacitor/core": "^8.4.2",
     "@tailwindcss/vite": "^4.1.14",
     "@types/express": "^4.17.21",
+    "@types/compression": "^1.7.5",
     "@types/node": "^22.14.0",
     "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^5.0.4",
