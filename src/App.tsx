@@ -100,7 +100,10 @@ export default function App() {
 
   // 画面オフ復帰・アイコンタップ復帰ともに即座にソリティアへ
   useEffect(() => {
-    const handleVisibilityChange = () => setAppMode('solitaire');
+    const handleVisibilityChange = () => {
+      if ((window as any).__filePickerOpen) return;
+      setAppMode('solitaire');
+    };
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);

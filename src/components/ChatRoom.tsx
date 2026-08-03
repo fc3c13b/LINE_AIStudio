@@ -115,6 +115,8 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileInputAllRef = useRef<HTMLInputElement>(null);
+  const openImagePicker = () => { (window as any).__filePickerOpen = true; setTimeout(() => { (window as any).__filePickerOpen = false; }, 60000); openImagePicker(); };
+  const openFilePicker  = () => { (window as any).__filePickerOpen = true; setTimeout(() => { (window as any).__filePickerOpen = false; }, 60000); openFilePicker(); };
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const prevScrollHeightRef = useRef<number>(0);
   const isNearBottomRef = useRef<boolean>(true);
@@ -193,6 +195,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
   }, [viewerIndex, mediaMessages.length]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    (window as any).__filePickerOpen = false;
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
@@ -238,6 +241,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
   };
 
   const handleFileAllUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    (window as any).__filePickerOpen = false;
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
     setIsUploadingFile(true);
@@ -1083,7 +1087,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
       {showPlusMenu && (
         <div className="bg-white border-t border-slate-200 p-3 grid grid-cols-4 gap-2 animate-in slide-in-from-bottom-2 duration-200 shrink-0 z-20">
           <button
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => openImagePicker()}
             className="flex flex-col items-center justify-center gap-1 p-2.5 rounded-xl bg-slate-50 hover:bg-emerald-50 border border-slate-200 transition text-slate-800 cursor-pointer group"
           >
             <Camera className="w-5 h-5 text-emerald-600 group-hover:scale-110 transition" />
@@ -1091,7 +1095,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
           </button>
 
           <button
-            onClick={() => fileInputAllRef.current?.click()}
+            onClick={() => openFilePicker()}
             className="flex flex-col items-center justify-center gap-1 p-2.5 rounded-xl bg-slate-50 hover:bg-blue-50 border border-slate-200 transition text-slate-800 cursor-pointer group"
           >
             <FileText className="w-5 h-5 text-blue-600 group-hover:scale-110 transition" />
@@ -1099,7 +1103,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
           </button>
 
           <button
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => openImagePicker()}
             className="flex flex-col items-center justify-center gap-1 p-2.5 rounded-xl bg-slate-50 hover:bg-emerald-50 border border-slate-200 transition text-slate-800 cursor-pointer group"
           >
             <Upload className="w-5 h-5 text-indigo-600 group-hover:scale-110 transition" />
@@ -1277,7 +1281,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
             {/* 2. Camera Button (写真のみ) */}
             <button
               type="button"
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => openImagePicker()}
               className="p-2 rounded-full text-slate-500 hover:bg-slate-100 transition shrink-0 cursor-pointer"
               title="写真撮影"
             >
@@ -1287,7 +1291,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
             {/* 3. File Button (すべてのファイル) */}
             <button
               type="button"
-              onClick={() => fileInputAllRef.current?.click()}
+              onClick={() => openFilePicker()}
               className="p-2 rounded-full text-slate-500 hover:bg-slate-100 transition shrink-0 cursor-pointer"
               title="ファイル送信"
             >
