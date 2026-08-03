@@ -1,13 +1,11 @@
 ﻿import express from 'express';
 import path from 'path';
+import fs from 'fs';
 
 export const musicRouter = express.Router();
 
-const SMB_HOST = process.env.SMB_HOST || '100.71.203.9';
-const SMB_SHARE = process.env.SMB_SHARE || 'music';
-const SMB_USER = process.env.SMB_USERNAME || 'guest';
-const SMB_PASS = process.env.SMB_PASSWORD || '';
-const SMB_DOMAIN = process.env.SMB_DOMAIN || 'WORKGROUP';
+// docker-compose.yml の /share/music_mount:/app/smb_music ボリュームマウント先
+const MUSIC_BASE = process.env.SMB_MOUNT || '/app/smb_music';
 
 const AUDIO_EXT = new Set(['.mp3', '.flac', '.m4a', '.ogg', '.wav', '.aac', '.opus', '.wma', '.mp4', '.webm']);
 const MIME_MAP: Record<string, string> = {
@@ -16,70 +14,64 @@ const MIME_MAP: Record<string, string> = {
   '.opus': 'audio/opus', '.wma': 'audio/x-ms-wma', '.mp4': 'audio/mp4', '.webm': 'audio/webm',
 };
 
-// @ts-ignore
-let SMB2Class: any = null;
-try { SMB2Class = require('@marsaud/smb2'); } catch {
-  console.warn('[MUSIC] @marsaud/smb2 not found. Music endpoints will return error.');
+function resolveSafe(reqPath: string): string {
+  const rel = reqPath.replace(/\.\./g, '').replace(/\\/g, '/').replace(/^\/+/, '');
+  const full = path.resolve(MUSIC_BASE, rel);
+  if (!full.startsWith(path.resolve(MUSIC_BASE))) throw new Error('Invalid path');
+  return full;
 }
 
-function createClient() {
-  if (!SMB2Class) throw new Error('@marsaud/smb2 not installed');
-  return new SMB2Class({
-    share: '\\\\' + SMB_HOST + '\\' + SMB_SHARE,
-    domain: SMB_DOMAIN,
-    username: SMB_USER,
-    password: SMB_PASS,
-    autoCloseTimeout: 10000,
-  });
-}
-
-function normPath(p: string): string {
-  return p.replace(/\.\./g, '').replace(/^[/\\]+/, '').replace(/\//g, '\\').trim();
-}
-
-// ディレクトリ一覧
-musicRouter.get('/browse', async (req, res) => {
-  const reqPath = normPath(typeof req.query.path === 'string' ? req.query.path : '');
-  let client: any;
+// ディレクトリ一覧（ホストマウント済み CIFS パスを fs で読む）
+musicRouter.get('/browse', (req, res) => {
+  const reqPath = typeof req.query.path === 'string' ? req.query.path : '';
   try {
-    client = createClient();
-    const entries: string[] = await client.readdir(reqPath || '');
+    const full = resolveSafe(reqPath);
+    if (!fs.existsSync(full)) {
+      return res.status(404).json({ success: false, error: `パスが見つかりません: ${reqPath || '/'}` });
+    }
+    const entries = fs.readdirSync(full, { withFileTypes: true });
     const items = entries
-      .filter(n => !n.startsWith('.') && !n.startsWith('$'))
-      .map(name => {
-        const ext = path.extname(name).toLowerCase();
-        const isAudio = AUDIO_EXT.has(ext);
-        // 拡張子なし or 音声でない = フォルダとみなす
-        const isDir = !ext || !AUDIO_EXT.has(ext);
-        return { name, path: reqPath ? reqPath + '\\' + name : name, isAudio, isDir, ext };
+      .filter(e => !e.name.startsWith('.') && !e.name.startsWith('$'))
+      .map(e => {
+        const ext = path.extname(e.name).toLowerCase();
+        const isDir = e.isDirectory();
+        return { name: e.name, path: reqPath ? `${reqPath}/${e.name}` : e.name, isDir, isAudio: !isDir && AUDIO_EXT.has(ext), ext };
       })
-      .sort((a, b) => {
-        if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
-        return a.name.localeCompare(b.name, 'ja');
-      });
+      .sort((a, b) => (a.isDir !== b.isDir ? (a.isDir ? -1 : 1) : a.name.localeCompare(b.name, 'ja')));
     res.json({ success: true, path: reqPath, items });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message || 'SMB browse failed' });
-  } finally {
-    try { client?.disconnect?.(); client?.close?.(); } catch {}
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// 音声ファイルストリーミング
-musicRouter.get('/stream', async (req, res) => {
-  const filePath = normPath(typeof req.query.path === 'string' ? req.query.path : '');
-  if (!filePath) return res.status(400).json({ error: 'path required' });
-  let client: any;
+// 音声ストリーミング（Range 対応でシーク可能）
+musicRouter.get('/stream', (req, res) => {
+  const reqPath = typeof req.query.path === 'string' ? req.query.path : '';
+  if (!reqPath) return res.status(400).json({ error: 'path required' });
   try {
-    client = createClient();
-    const ext = path.extname(filePath).toLowerCase();
-    const readStream: any = await client.createReadStream(filePath);
-    res.setHeader('Content-Type', MIME_MAP[ext] || 'application/octet-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    readStream.pipe(res);
-    res.on('close', () => { try { client?.disconnect?.(); client?.close?.(); } catch {} });
+    const full = resolveSafe(reqPath);
+    const stat = fs.statSync(full);
+    const total = stat.size;
+    const ext = path.extname(full).toLowerCase();
+    const contentType = MIME_MAP[ext] || 'application/octet-stream';
+    const range = req.headers.range;
+    if (range) {
+      const [startStr, endStr] = range.replace(/bytes=/, '').split('-');
+      const start = parseInt(startStr, 10);
+      const end = endStr ? parseInt(endStr, 10) : total - 1;
+      res.writeHead(206, {
+        'Content-Range': `bytes ${start}-${end}/${total}`,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': end - start + 1,
+        'Content-Type': contentType,
+      });
+      fs.createReadStream(full, { start, end }).pipe(res);
+    } else {
+      res.writeHead(200, { 'Content-Length': total, 'Content-Type': contentType, 'Accept-Ranges': 'bytes' });
+      fs.createReadStream(full).pipe(res);
+    }
   } catch (err: any) {
-    try { client?.disconnect?.(); client?.close?.(); } catch {}
-    if (!res.headersSent) res.status(500).json({ error: err.message || 'SMB stream failed' });
+    if (!res.headersSent) res.status(500).json({ error: err.message });
   }
 });
+
