@@ -21,6 +21,7 @@ interface HomeTabProps {
   onOpenSolitaire?: () => void;
   isAdmin?: boolean;
   onRefreshUsers?: () => void;
+  adminDebugLog?: string[];
 }
 
 export const HomeTab: React.FC<HomeTabProps> = ({
@@ -41,6 +42,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   onOpenSolitaire,
   isAdmin = false,
   onRefreshUsers,
+  adminDebugLog = [],
 }) => {
   const [adminConfirm, setAdminConfirm] = useState<{ user: User; action: 'suspend' | 'unsuspend' | 'delete' } | null>(null);
   const [adminLoading, setAdminLoading] = useState(false);
@@ -483,6 +485,27 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                 >
                   解除する
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* デバッグパネル: ログイン中は常に表示（adminフロー確認用）*/}
+        {isLoggedIn && adminDebugLog.length > 0 && (
+          <div className="space-y-1">
+            <div className="text-[10px] font-bold text-slate-400 px-1">DEBUG LOG</div>
+            <div className="bg-slate-900 rounded-xl p-2.5 font-mono text-[10px] leading-relaxed max-h-48 overflow-y-auto">
+              <div className="text-green-400 mb-1"># Admin フロー確認</div>
+              {adminDebugLog.map((line, i) => (
+                <div key={i} className={`${
+                  line.includes('エラー') || line.includes('403') ? 'text-red-400' :
+                  line.includes('isAdmin=true') || line.includes('完了') ? 'text-green-300' :
+                  line.includes('問い合わせ') ? 'text-yellow-300' : 'text-slate-300'
+                }`}>{line}</div>
+              ))}
+              <div className="text-slate-500 mt-1"># Step3: isAdmin={String(isAdmin)} isLoggedIn={String(isLoggedIn)} users={users.length}人</div>
+              <div className={`${isAdmin && isLoggedIn ? 'text-green-300' : 'text-red-400'}`}>
+                # 結果: 全ユーザー一覧={isAdmin && isLoggedIn ? '表示するはず' : '非表示'}
               </div>
             </div>
           </div>

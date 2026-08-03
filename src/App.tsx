@@ -30,6 +30,8 @@ export default function App() {
     outgoing: [],
   });
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+  const [adminDebugLog, setAdminDebugLog] = useState<string[]>([]);
+  const addDebug = (msg: string) => setAdminDebugLog(prev => [...prev.slice(-19), `${new Date().toLocaleTimeString()}: ${msg}`]);
 
   // チャット表示設定（localStorageで永続化）
   const [chatSettings, setChatSettings] = useState<ChatSettings>(() => {
@@ -123,6 +125,8 @@ export default function App() {
     if (accountInfo) {
       setAccount(accountInfo);
       localStorage.setItem('line_app_account', JSON.stringify(accountInfo));
+      addDebug(`Step1 ログイン: name=${accountInfo.name} isAdmin=${accountInfo.isAdmin ?? 'undefined'}`);
+      addDebug(`Step1 localStorage保存: ${JSON.stringify({ id: accountInfo.id, isAdmin: accountInfo.isAdmin })}`);
     }
     setActiveUserId(user.id);
     wsService.identify(user.id);
@@ -141,6 +145,7 @@ export default function App() {
   // 1. Initial REST fetch
   const fetchData = async () => {
     try {
+      addDebug(`Step2 fetchData開始: account.isAdmin=${account?.isAdmin ?? 'undefined'} id=${account?.id?.slice(0,8) ?? '未ログイン'}`);
       const [usersRes, roomsRes] = await Promise.all([
         fetch(apiUrl('/api/users')).then((response) => readApiResponse<User[]>(response)),
         fetch(apiUrl(`/api/rooms?userId=${encodeURIComponent(activeUserId)}`)).then((response) => readApiResponse<ChatRoom[]>(response)),
@@ -148,6 +153,7 @@ export default function App() {
 
       setUsers(usersRes);
       setRooms(roomsRes);
+      addDebug(`Step2 /api/users: ${usersRes.length}人取得`);
 
       // Fetch messages for initial rooms（最新ページのみ）
       for (const room of roomsRes) {
@@ -165,18 +171,25 @@ export default function App() {
 
       // 管理者権限をサーバーに問い合わせて確認・更新（旧セッション・旧APK対応）
       if (account?.id && !account.isAdmin) {
+        addDebug(`Step2 /api/admin/users 問い合わせ中...`);
         fetch(apiUrl(`/api/admin/users?adminId=${encodeURIComponent(account.id)}`))
           .then(res => {
+            addDebug(`Step2 /api/admin/users: HTTP ${res.status}`);
             if (res.ok) {
               setAccount(prev => {
                 if (!prev || prev.isAdmin) return prev;
                 const updated = { ...prev, isAdmin: true };
                 localStorage.setItem('line_app_account', JSON.stringify(updated));
+                addDebug(`Step2 isAdmin=true に更新完了`);
                 return updated;
               });
+            } else {
+              addDebug(`Step2 管理者権限なし (403)`);
             }
           })
-          .catch(() => {});
+          .catch(e => addDebug(`Step2 エラー: ${e.message}`));
+      } else if (account?.isAdmin) {
+        addDebug(`Step2 既に isAdmin=true 済み`);
       }
     } catch (err) {
       console.error('Error fetching initial REST data:', err);
@@ -741,6 +754,7 @@ export default function App() {
               onOpenSolitaire={() => setShowSolitaire(true)}
               isAdmin={!!account?.isAdmin}
               onRefreshUsers={fetchData}
+              adminDebugLog={adminDebugLog}
             />
           )}
 
