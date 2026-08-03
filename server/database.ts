@@ -533,11 +533,13 @@ export function migrateFromJsonIfNeeded(): void {
 
 // ---- 管理者アカウントの初期化（カラム追加のみ・既存登録済まで対応）----
 export function initAdminAccount(): void {
-  // 既存 administrator アカウントにまだ isAdmin が付いていなければ付与
-  const existing = accountsRepo.getByName('administrator');
-  if (existing && !existing.isAdmin) {
-    sqlite.prepare('UPDATE accounts SET isAdmin = 1 WHERE id = ?').run(existing.id);
-    console.log('[DB] Granted admin to existing administrator account');
+  // administrator と admin の両方に isAdmin を付与
+  for (const adminName of ['administrator', 'admin']) {
+    const existing = accountsRepo.getByName(adminName);
+    if (existing && !existing.isAdmin) {
+      sqlite.prepare('UPDATE accounts SET isAdmin = 1 WHERE id = ?').run(existing.id);
+      console.log(`[DB] Granted admin to existing ${adminName} account`);
+    }
   }
 }
 

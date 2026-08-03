@@ -51,7 +51,8 @@ authRouter.post('/register', (req, res) => {
 
   const userId = `user-${Date.now()}`;
   const { hash, salt } = hashPassword(password);
-  const isAdminAccount = name.trim().toLowerCase() === 'administrator' ? 1 : 0;
+  const ADMIN_NAMES = ['administrator', 'admin'];
+  const isAdminAccount = ADMIN_NAMES.includes(name.trim().toLowerCase()) ? 1 : 0;
 
   const newAccount: Account = {
     id: userId,
