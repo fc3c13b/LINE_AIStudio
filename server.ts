@@ -368,6 +368,29 @@ app.post('/api/upload', (req, res) => {
   }
 });
 
+// チャット内メディアのファイル削除（送信取消時に呼ばれる）
+app.delete('/api/upload', (req, res) => {
+  try {
+    const url = req.body?.url;
+    if (!url || typeof url !== 'string' || !url.startsWith('/uploads/')) {
+      return res.status(400).json({ error: 'Invalid URL' });
+    }
+    const relative = url.replace(/^\/uploads\//, '');
+    const target = path.resolve(UPLOADS_DIR, relative);
+    if (!target.startsWith(path.resolve(UPLOADS_DIR) + path.sep)) {
+      return res.status(400).json({ error: 'Invalid path' });
+    }
+    if (fs.existsSync(target)) {
+      fs.unlinkSync(target);
+      console.log(`[UPLOAD] File deleted: ${target}`);
+    }
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('File delete error:', err);
+    return res.status(500).json({ error: 'Failed to delete file' });
+  }
+});
+
 // Authentication Routes
 app.use('/api/auth', authRouter);
 

@@ -34,6 +34,8 @@ import {
   Copy,
   RotateCcw,
   Trash2,
+  Scissors,
+  ClipboardPaste,
 } from 'lucide-react';
 
 interface ChatRoomProps {
@@ -84,6 +86,15 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
 
   // Message Reaction & Context Menu State
   const [selectedMsgForMenu, setSelectedMsgForMenu] = useState<Message | null>(null);
+  const [textSelectMsg, setTextSelectMsg] = useState<Message | null>(null);
+  const [mediaToDelete, setMediaToDelete] = useState<Message | null>(null);
+  // アプリ内クリップボード（買り付け用）
+  const [internalClipboard, setInternalClipboard] = useState('');
+  const [showPasteBar, setShowPasteBar] = useState(false);
+
+  // 長押し検出用
+  const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressTriggered = useRef(false);
 
   // ページネーション（過去メッセージ読み込み）
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
@@ -333,6 +344,52 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
     setSelectedMsgForMenu(null);
   };
 
+  // \u30e1\u30c7\u30a3\u30a2\u30e1\u30c3\u30bb\u30fc\u30b8\u306e\u5265\u9664\uff08\u30d5\u30a1\u30a4\u30eb\u3082\u30b5\u30fc\u30d0\u30fc\u304b\u3089\u524a\u9664\uff09
+  const handleMediaDelete = async (msg: Message) => {
+    if (msg.content.startsWith('/uploads/')) {
+      try {
+        await fetch(apiUrl('/api/upload'), {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: msg.content }),
+        });
+      } catch (err) {
+        console.error('Failed to delete file from server:', err);
+      }
+    }
+    if (onDeleteMessage) onDeleteMessage(msg.id);
+    setMediaToDelete(null);
+    if (viewerIndex !== null) closeViewer();
+  };
+
+  // \u9577\u62bc\u3057\u958b\u59cb\uff08\u30c6\u30ad\u30b9\u30c8\u306f\u30a2\u30af\u30b7\u30e7\u30f3\u30e1\u30cb\u30e5\u30fc\u3001\u30e1\u30c7\u30a3\u30a2\u306f\u524a\u9664\u78ba\u8a8d\uff09
+  const startLongPress = (msg: Message) => {
+    longPressTriggered.current = false;
+    if (longPressRef.current) clearTimeout(longPressRef.current);
+    longPressRef.current = setTimeout(() => {
+      longPressTriggered.current = true;
+      longPressRef.current = null;
+      if (msg.type === 'image' || msg.type === 'video' || msg.type === 'voice') {
+        if (msg.senderId === currentUser.id) setMediaToDelete(msg);
+      } else if (msg.type === 'text') {
+        setSelectedMsgForMenu(msg);
+      }
+    }, 600);
+  };
+
+  const cancelLongPress = () => {
+    if (longPressRef.current) {
+      clearTimeout(longPressRef.current);
+      longPressRef.current = null;
+    }
+  };
+
+  const handleCopyText = (text: string) => {
+    navigator.clipboard?.writeText(text);
+    setInternalClipboard(text);
+    setSelectedMsgForMenu(null);
+  };
+
   // 引用リプライを開始
   const handleStartReply = (msg: Message) => {
     if (onSetReplyingTo) onSetReplyingTo(msg);
@@ -572,6 +629,10 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
                         <div
                           key={img.id}
                           onClick={() => openViewerForMessage(img.id)}
+                          onContextMenu={(e) => { e.preventDefault(); if (isMe) setMediaToDelete(img); }}
+                          onTouchStart={() => startLongPress(img)}
+                          onTouchEnd={cancelLongPress}
+                          onTouchMove={cancelLongPress}
                           className="overflow-hidden rounded-md border border-black/10 cursor-pointer group"
                         >
                           <img src={img.content} alt="画像" className="w-full h-auto object-cover max-h-28 group-hover:opacity-90 transition" />
@@ -630,7 +691,18 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
                 <div className={`flex items-end gap-1 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
                   {/* Message Content Bubble */}
                   <div
-                    onClick={() => setSelectedMsgForMenu(selectedMsgForMenu?.id === msg.id ? null : msg)}
+                    onClick={() => !longPressTriggered.current && setSelectedMsgForMenu(selectedMsgForMenu?.id === msg.id ? null : msg)}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      if (msg.type === 'image' || msg.type === 'video' || msg.type === 'voice') {
+                        if (msg.senderId === currentUser.id) setMediaToDelete(msg);
+                      } else {
+                        setSelectedMsgForMenu(msg);
+                      }
+                    }}
+                    onTouchStart={() => startLongPress(msg)}
+                    onTouchEnd={cancelLongPress}
+                    onTouchMove={cancelLongPress}
                     style={{
                       fontSize: chatSettings.fontSize,
                       borderWidth: chatSettings.bubbleBorderWidth ?? 0,
@@ -794,14 +866,20 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
               </button>
               {selectedMsgForMenu.type === 'text' && (
                 <button
-                  onClick={() => {
-                    navigator.clipboard?.writeText(selectedMsgForMenu.content);
-                    setSelectedMsgForMenu(null);
-                  }}
+                  onClick={() => handleCopyText(selectedMsgForMenu.content)}
                   className="w-full py-2.5 text-left flex items-center gap-2 px-2 hover:bg-slate-50 rounded-lg cursor-pointer"
                 >
                   <Copy className="w-4 h-4 text-emerald-600" />
                   <span>コピー</span>
+                </button>
+              )}
+              {selectedMsgForMenu.type === 'text' && (
+                <button
+                  onClick={() => { setTextSelectMsg(selectedMsgForMenu); setSelectedMsgForMenu(null); }}
+                  className="w-full py-2.5 text-left flex items-center gap-2 px-2 hover:bg-slate-50 rounded-lg cursor-pointer"
+                >
+                  <Scissors className="w-4 h-4 text-indigo-500" />
+                  <span>部分コピー（テキスト選択）</span>
                 </button>
               )}
               {selectedMsgForMenu.senderId === currentUser.id && (
@@ -813,6 +891,82 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
                   <span>送信取消</span>
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* テキスト選択モーダル（部分コピー） */}
+      {textSelectMsg && (
+        <div
+          className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center p-4 animate-in fade-in"
+          onClick={() => setTextSelectMsg(null)}
+        >
+          <div
+            className="bg-white rounded-2xl w-full max-w-sm space-y-3 p-4 animate-in slide-in-from-bottom-2 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-xs font-bold text-slate-500 flex items-center gap-1.5">
+              <Scissors className="w-3.5 h-3.5" />
+              テキスト選択・コピー
+            </div>
+            <p className="text-sm text-slate-900 select-text whitespace-pre-wrap break-words p-3 bg-slate-50 rounded-xl border border-slate-200 leading-relaxed min-h-[60px]">
+              {textSelectMsg.content}
+            </p>
+            <p className="text-[10px] text-slate-400">テキストを長押しして範囲選択できます</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => { handleCopyText(textSelectMsg.content); setTextSelectMsg(null); }}
+                className="flex-1 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5"
+              >
+                <Copy className="w-3.5 h-3.5" />
+                全てコピー
+              </button>
+              <button
+                onClick={() => setTextSelectMsg(null)}
+                className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl"
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* メディア削除確認モーダル */}
+      {mediaToDelete && (
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 animate-in fade-in"
+          onClick={() => setMediaToDelete(null)}
+        >
+          <div
+            className="bg-white rounded-2xl w-full max-w-xs p-5 space-y-4 animate-in zoom-in-95 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <div className="font-bold text-slate-900 text-sm">
+                  {mediaToDelete.type === 'image' ? '画像' : mediaToDelete.type === 'video' ? '動画' : 'ボイス'}を削除
+                </div>
+                <div className="text-xs text-slate-500 mt-0.5">サーバーからも削除されます</div>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleMediaDelete(mediaToDelete)}
+                className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white font-bold text-sm rounded-xl"
+              >
+                削除する
+              </button>
+              <button
+                onClick={() => setMediaToDelete(null)}
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm rounded-xl"
+              >
+                キャンセル
+              </button>
             </div>
           </div>
         </div>
@@ -982,6 +1136,24 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
         </div>
       )}
 
+      {/* 貼り付けバー（コピー済みテキストがある場合） */}
+      {showPasteBar && internalClipboard && (
+        <div className="bg-slate-50 border-t border-slate-200 px-3 py-1.5 flex items-center gap-2 z-20 shrink-0 animate-in slide-in-from-bottom-1">
+          <ClipboardPaste className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+          <span className="text-xs text-slate-500 truncate flex-1">{internalClipboard.slice(0, 50)}{internalClipboard.length > 50 ? '…' : ''}</span>
+          <button
+            type="button"
+            onClick={() => { setInputText(prev => prev + internalClipboard); setShowPasteBar(false); }}
+            className="px-3 py-1 bg-emerald-500 text-white text-xs font-bold rounded-full shrink-0"
+          >
+            貼り付け
+          </button>
+          <button type="button" onClick={() => setShowPasteBar(false)} className="p-1 text-slate-400 shrink-0">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* Official LINE Style Bottom Input Form Bar */}
       <form
         onSubmit={handleSendText}
@@ -1033,6 +1205,8 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
             type="text"
             value={inputText}
             onChange={handleTextChange}
+            onFocus={() => { if (internalClipboard) setShowPasteBar(true); }}
+            onBlur={() => setTimeout(() => setShowPasteBar(false), 200)}
             placeholder="メッセージを入力..."
             className="w-full bg-slate-100 border border-slate-200 focus:border-[#00c300] focus:bg-white rounded-full pl-3.5 pr-10 py-2 text-xs sm:text-sm text-slate-900 font-medium placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#00c300]/20 transition"
           />
