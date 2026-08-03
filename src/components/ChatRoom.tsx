@@ -677,7 +677,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
                           onTouchStart={() => startLongPress(img)}
                           onTouchEnd={cancelLongPress}
                           onTouchMove={cancelLongPress}
-                          className="overflow-hidden rounded-md border border-black/10 cursor-pointer group"
+                          className="overflow-hidden rounded-md cursor-pointer group"
                         >
                           <img src={img.meta?.thumbUrl || img.content} alt="画像" className="w-full h-auto object-cover max-h-28 group-hover:opacity-90 transition" />
                         </div>
@@ -780,7 +780,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
                     {msg.type === 'image' && (
                       <div
                         onClick={(e) => { e.stopPropagation(); openViewerForMessage(msg.id); }}
-                        className="overflow-hidden rounded-lg border border-black/10 cursor-pointer relative group transition hover:opacity-95 shadow-xs"
+                        className="overflow-hidden rounded-lg cursor-pointer relative group transition hover:opacity-95 shadow-xs"
                         style={{ maxWidth: chatSettings.maxPhotoHeight }}
                         title="タップして全画面表示"
                       >
@@ -796,7 +796,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
                     {msg.type === 'video' && (
                       <div
                         onClick={(e) => { e.stopPropagation(); openViewerForMessage(msg.id); }}
-                        className="max-w-[160px] overflow-hidden rounded-lg border border-black/10 bg-black cursor-pointer relative group shadow-xs"
+                        className="max-w-[160px] overflow-hidden rounded-lg bg-black cursor-pointer relative group shadow-xs"
                         title="タップして全画面表示"
                       >
                         <video src={msg.content} className="w-full h-auto max-h-40 rounded-lg object-cover" preload="metadata" />
