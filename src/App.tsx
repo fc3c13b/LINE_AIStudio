@@ -50,6 +50,9 @@ export default function App() {
   const typingDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTypingSentRef = useRef<boolean>(false);
   const msgCacheTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  // WS コールバック内で常に最新の accountId を参照するための ref（stale closure 対策）
+  const accountIdRef = useRef<string | undefined>(account?.id);
+  useEffect(() => { accountIdRef.current = account?.id; }, [account]);
 
   // メッセージ変更時に2秒デバウンスでキャッシュ保存（10MB LRU管理）
   useEffect(() => {
@@ -265,11 +268,12 @@ export default function App() {
           return [...prev, updated];
         });
       } else if (payload.type === 'friend_request') {
-        // 友達申請の受信・状態変化。自分に関係するもののみ再取得
-        if (account?.id) {
+        // 友達申請の受信・状態変化。accountIdRef で最新 ID を参照（stale closure 回避）
+        const currentId = accountIdRef.current;
+        if (currentId) {
           const fr = payload.friendRequest;
-          if (!fr || fr.fromUserId === account.id || fr.toUserId === account.id) {
-            fetchFriendRequests(account.id);
+          if (!fr || fr.fromUserId === currentId || fr.toUserId === currentId) {
+            fetchFriendRequests(currentId);
             // 承認された場合は友達リスト等を更新
             if (fr && fr.status === 'accepted') {
               fetchData();
