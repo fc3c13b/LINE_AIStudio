@@ -14,6 +14,7 @@ import { SolitaireGame } from './components/SolitaireGame';
 import { UnauthenticatedGuard } from './components/UnauthenticatedGuard';
 import { ModalsContainer } from './components/ModalsContainer';
 import { Home, MessageSquare, Images, Music, Settings as SettingsIcon } from 'lucide-react';
+import { loadAllCachedMessages, cacheRoomMessages, clearMessageCache } from './services/messageCache';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>('chats');
@@ -23,7 +24,7 @@ export default function App() {
 
   const [users, setUsers] = useState<User[]>([]);
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
-  const [roomMessages, setRoomMessages] = useState<Record<string, Message[]>>({});
+  const [roomMessages, setRoomMessages] = useState<Record<string, Message[]>>(() => loadAllCachedMessages());
   const [partnerTyping, setPartnerTyping] = useState<Record<string, boolean>>({});
   const [friendRequests, setFriendRequests] = useState<{ incoming: FriendRequest[]; outgoing: FriendRequest[] }>({
     incoming: [],
@@ -47,6 +48,18 @@ export default function App() {
   // タイピング送信のデバウンス用
   const typingDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTypingSentRef = useRef<boolean>(false);
+  const msgCacheTimerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  // メッセージ変更時に2秒デバウンスでキャッシュ保存（10MB LRU管理）
+  useEffect(() => {
+    clearTimeout(msgCacheTimerRef.current);
+    msgCacheTimerRef.current = setTimeout(() => {
+      for (const [roomId, messages] of Object.entries(roomMessages)) {
+        if (messages.length > 0) cacheRoomMessages(roomId, messages);
+      }
+    }, 2000);
+    return () => clearTimeout(msgCacheTimerRef.current);
+  }, [roomMessages]);
 
   const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
   const [callState, setCallState] = useState<CallState | null>(null);
@@ -114,6 +127,8 @@ export default function App() {
     setActiveUserId('user-me');
     setIsAppLocked(false);
     setFriendRequests({ incoming: [], outgoing: [] });
+    setRoomMessages({});
+    clearMessageCache();
   };
 
   // 1. Initial REST fetch
