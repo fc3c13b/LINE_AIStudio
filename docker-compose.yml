@@ -22,4 +22,4 @@ services:
     restart: always
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    command: --interval 300 my-app # 5分（300秒）おきに更新チェック
+    command: --interval 180 my-app # 5分（300秒）おきに更新チェック

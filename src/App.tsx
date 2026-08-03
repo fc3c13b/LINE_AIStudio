@@ -51,7 +51,7 @@ export default function App() {
   const lastTypingSentRef = useRef<boolean>(false);
   const msgCacheTimerRef = useRef<ReturnType<typeof setTimeout>>();
   // WS コールバック内で常に最新の accountId を参照するための ref（stale closure 対策）
-  const accountIdRef = useRef<string | undefined>(account?.id);
+  const accountIdRef = useRef<string | undefined>(undefined);
   useEffect(() => { accountIdRef.current = account?.id; }, [account]);
 
   // メッセージ変更時に2秒デバウンスでキャッシュ保存（10MB LRU管理）
