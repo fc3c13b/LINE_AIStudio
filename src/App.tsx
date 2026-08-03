@@ -746,6 +746,11 @@ export default function App() {
               }}
               rooms={rooms}
               onSendToChat={handleSendSystemToRoom}
+              partnerUser={(() => {
+                if (!previousRoomId) return null;
+                const room = rooms.find(r => r.id === previousRoomId);
+                return room?.members.find(m => m.id !== me.id) ?? null;
+              })()}
             />
           )}
 

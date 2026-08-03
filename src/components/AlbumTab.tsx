@@ -82,10 +82,11 @@ interface AlbumTabProps {
   onGoHome?: () => void;
   rooms?: import('../types').ChatRoom[];
   onSendToChat?: (roomId: string, text: string) => void;
+  partnerUser?: import('../types').User | null;
 }
 
-export const AlbumTab: React.FC<AlbumTabProps> = ({ onOpenAuthModal, isLoggedIn = false, userId = null, onGoHome, rooms = [], onSendToChat }) => {
-  const [albums, setAlbums] = useState<Album[]>([]);
+export const AlbumTab: React.FC<AlbumTabProps> = ({ onOpenAuthModal, isLoggedIn = false, userId = null, onGoHome, rooms = [], onSendToChat, partnerUser = null }) => {
+  const [albums, setAlbums] = useState<Album[]>([]); 
   const [isLoadingAlbums, setIsLoadingAlbums] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
@@ -118,6 +119,11 @@ export const AlbumTab: React.FC<AlbumTabProps> = ({ onOpenAuthModal, isLoggedIn 
   const [shareModalOpen, setShareModalOpen] = useState<{ text: string } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 相手がいる場合は自分または相手所有のアルバムのみ表示する
+  const visibleAlbums = partnerUser
+    ? albums.filter(a => a.ownerId === userId || a.ownerId === partnerUser.id)
+    : albums;
 
   // サーバーからアルバム一覧を取得
   const fetchAlbums = async (uid: string) => {
@@ -488,9 +494,14 @@ export const AlbumTab: React.FC<AlbumTabProps> = ({ onOpenAuthModal, isLoggedIn 
             )}
             <div className="flex-1">
               <h1 className="text-lg font-bold text-slate-900 tracking-tight leading-none">アルバム</h1>
-              <p className="text-[11px] text-slate-500 font-medium mt-0.5">
-                {albums.length}個のアルバム
-              </p>
+              {partnerUser ? (
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <img src={partnerUser.avatar} alt={partnerUser.name} className="w-4 h-4 rounded-full object-cover border border-slate-200" />
+                  <span className="text-[11px] text-slate-500 font-medium">{partnerUser.name}との共有アルバム·{visibleAlbums.length}個</span>
+                </div>
+              ) : (
+                <p className="text-[11px] text-slate-500 font-medium mt-0.5">{albums.length}個のアルバム</p>
+              )}
             </div>
 
             <button
@@ -504,14 +515,14 @@ export const AlbumTab: React.FC<AlbumTabProps> = ({ onOpenAuthModal, isLoggedIn 
 
           {/* Albums Cards — 1列フル幅表示 */}
           <div className="p-2 sm:p-3 flex-1 w-full overflow-y-auto">
-            {isLoadingAlbums && albums.length === 0 ? (
+            {isLoadingAlbums && visibleAlbums.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-slate-400 gap-2">
                 <Loader2 className="w-6 h-6 animate-spin" />
                 <span className="text-xs font-medium">アルバムを読み込み中...</span>
               </div>
-            ) : albums.length > 0 ? (
+            ) : visibleAlbums.length > 0 ? (
               <div className="flex flex-col gap-3 w-full">
-                {albums.map((album) => {
+                {visibleAlbums.map((album) => {
                   const count = album.items?.length || 0;
                   // 画像数が少ない(≤2)ときは半幅、多い場合はフル幅
                   const isNarrow = count <= 2;
