@@ -87,8 +87,14 @@ const btnStyle: React.CSSProperties = {
 };
 
 export const SolitaireGame: React.FC<{ onSecretCode: () => void; onClose?: () => void }> = ({ onSecretCode, onClose }) => {
-  const [gs, setGs] = useState<GS>(deal);
-  const [hist, setHist] = useState<GS[]>([]);
+  // ゲーム状態をlocalStorageから復元
+  const [gs, setGs] = useState<GS>(() => {
+    try { const s = JSON.parse(localStorage.getItem('sol_gs') || 'null'); if (s) return s; } catch {}
+    return deal();
+  });
+  const [hist, setHist] = useState<GS[]>(() => {
+    try { return JSON.parse(localStorage.getItem('sol_hist') || '[]'); } catch { return []; }
+  });
   const [sel, setSel] = useState<Sel>(null);
   const [hintId, setHintId] = useState<string | null>(null);
   const [won, setWon] = useState(false);
@@ -101,20 +107,40 @@ export const SolitaireGame: React.FC<{ onSecretCode: () => void; onClose?: () =>
   };
   const seqRef = useRef<BtnId[]>([]);
   const tmRef = useRef<ReturnType<typeof setTimeout>>();
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const musicSaveTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
-  // 音楽プレーヤー state
-  const [musicExpanded, setMusicExpanded] = useState(false);
-  const [currentDir, setCurrentDir] = useState('');
-  const [dirHistory, setDirHistory] = useState<string[]>([]);
-  const [musicItems, setMusicItems] = useState<SmbItem[]>([]);
+  // 音楽プレーヤー state（localStorageから復元）
+  const [musicExpanded, setMusicExpanded] = useState<boolean>(() => {
+    try { return JSON.parse(localStorage.getItem('music_state') || '{}').musicExpanded ?? false; } catch { return false; }
+  });
+  const [currentDir, setCurrentDir] = useState<string>(() => {
+    try { return JSON.parse(localStorage.getItem('music_state') || '{}').currentDir ?? ''; } catch { return ''; }
+  });
+  const [dirHistory, setDirHistory] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('music_state') || '{}').dirHistory ?? []; } catch { return []; }
+  });
+  const [musicItems, setMusicItems] = useState<SmbItem[]>(() => {
+    try { return JSON.parse(localStorage.getItem('music_state') || '{}').musicItems ?? []; } catch { return []; }
+  });
   const [musicLoading, setMusicLoading] = useState(false);
   const [musicError, setMusicError] = useState('');
-  const [playlist, setPlaylist] = useState<SmbItem[]>([]);
-  const [playlistIdx, setPlaylistIdx] = useState(-1);
-  const [currentTrack, setCurrentTrack] = useState<SmbItem | null>(null);
+  const [playlist, setPlaylist] = useState<SmbItem[]>(() => {
+    try { return JSON.parse(localStorage.getItem('music_state') || '{}').playlist ?? []; } catch { return []; }
+  });
+  const [playlistIdx, setPlaylistIdx] = useState<number>(() => {
+    try { return JSON.parse(localStorage.getItem('music_state') || '{}').playlistIdx ?? -1; } catch { return -1; }
+  });
+  const [currentTrack, setCurrentTrack] = useState<SmbItem | null>(() => {
+    try { return JSON.parse(localStorage.getItem('music_state') || '{}').currentTrack ?? null; } catch { return null; }
+  });
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isShuffle, setIsShuffle] = useState(false);
-  const [isLoop, setIsLoop] = useState(false);
+  const [isShuffle, setIsShuffle] = useState<boolean>(() => {
+    try { return JSON.parse(localStorage.getItem('music_state') || '{}').isShuffle ?? false; } catch { return false; }
+  });
+  const [isLoop, setIsLoop] = useState<boolean>(() => {
+    try { return JSON.parse(localStorage.getItem('music_state') || '{}').isLoop ?? false; } catch { return false; }
+  });
   const audioRef = useRef<HTMLAudioElement>(null);
 
   const clone = (g: GS): GS => JSON.parse(JSON.stringify(g));
@@ -232,6 +258,8 @@ export const SolitaireGame: React.FC<{ onSecretCode: () => void; onClose?: () =>
   const doRestart = useCallback(() => {
     trackBtn('restart');
     setGs(deal()); setHist([]); setSel(null); setHintId(null); setWon(false);
+    localStorage.removeItem('sol_gs');
+    localStorage.removeItem('sol_hist');
   }, [trackBtn]);
 
   // 音楽プレーヤー関数
@@ -326,6 +354,39 @@ export const SolitaireGame: React.FC<{ onSecretCode: () => void; onClose?: () =>
       browseDir('');
     }
   }, [musicExpanded]);
+
+  // ゲーム状態を1秒デバウンスで保存
+  useEffect(() => {
+    clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      try {
+        localStorage.setItem('sol_gs', JSON.stringify(gs));
+        localStorage.setItem('sol_hist', JSON.stringify(hist.slice(-10)));
+      } catch {}
+    }, 1000);
+    return () => clearTimeout(saveTimerRef.current);
+  }, [gs, hist]);
+
+  // 音楽プレーヤー状態を1秒デバウンスで保存
+  useEffect(() => {
+    clearTimeout(musicSaveTimerRef.current);
+    musicSaveTimerRef.current = setTimeout(() => {
+      try {
+        localStorage.setItem('music_state', JSON.stringify({
+          currentTrack, playlist, playlistIdx, currentDir,
+          musicItems, isShuffle, isLoop, musicExpanded, dirHistory,
+        }));
+      } catch {}
+    }, 1000);
+    return () => clearTimeout(musicSaveTimerRef.current);
+  }, [currentTrack, playlist, playlistIdx, currentDir, musicItems, isShuffle, isLoop, musicExpanded, dirHistory]);
+
+  // 起動時に前回の曲を設定（ブラウザ規制で自動再生は不可、再生ボタンで続きから）
+  useEffect(() => {
+    if (currentTrack && audioRef.current && !audioRef.current.src) {
+      audioRef.current.src = apiUrl(`/api/music/stream?path=${encodeURIComponent(currentTrack.path)}`);
+    }
+  }, []);
 
   const renderCard = (card: Card, onClick: () => void, extra: React.CSSProperties = {}) => {
     const isSelected = !!sel?.cards.some(c => c.id === card.id);
