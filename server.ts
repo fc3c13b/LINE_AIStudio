@@ -397,6 +397,10 @@ app.use('/api/auth', authRouter);
 // Chat & User Routes
 app.use('/api', chatRouter);
 
+// Music SMB Routes
+import { musicRouter } from './server/musicRoutes';
+app.use('/api/music', musicRouter);
+
 // Album Routes
 app.use('/api', albumRouter);
 

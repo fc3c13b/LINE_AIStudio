@@ -1,5 +1,8 @@
-﻿import React, { useState, useCallback, useRef } from 'react';
-import { RotateCcw, Lightbulb, Undo2, Trophy, ArrowLeft } from 'lucide-react';
+﻿import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { RotateCcw, Lightbulb, Undo2, Trophy, ArrowLeft,
+  Music, Play, Pause, SkipBack, SkipForward, Shuffle, Repeat,
+  ChevronUp, ChevronDown, Folder } from 'lucide-react';
+import { apiUrl } from '../services/api';
 
 type Suit = 'S' | 'H' | 'D' | 'C';
 interface Card { id: string; suit: Suit; rank: number; faceUp: boolean; }
@@ -24,6 +27,8 @@ const DESIGNS: { id: CardDesign; label: string; bg: string; dot: string }[] = [
 // 隠し操作: やり直す → ヒント → 1枚戻す の順に2秒以内に押すとLINEへ切り替わる
 const SECRET: BtnId[] = ['restart', 'hint', 'undo'];
 const CW = 46, CH = 64;
+
+interface SmbItem { name: string; path: string; isAudio: boolean; isDir: boolean; ext: string; }
 
 function mkDeck(): Card[] {
   return SUITS.flatMap(suit =>
@@ -96,6 +101,21 @@ export const SolitaireGame: React.FC<{ onSecretCode: () => void; onClose?: () =>
   };
   const seqRef = useRef<BtnId[]>([]);
   const tmRef = useRef<ReturnType<typeof setTimeout>>();
+
+  // 音楽プレーヤー state
+  const [musicExpanded, setMusicExpanded] = useState(false);
+  const [currentDir, setCurrentDir] = useState('');
+  const [dirHistory, setDirHistory] = useState<string[]>([]);
+  const [musicItems, setMusicItems] = useState<SmbItem[]>([]);
+  const [musicLoading, setMusicLoading] = useState(false);
+  const [musicError, setMusicError] = useState('');
+  const [playlist, setPlaylist] = useState<SmbItem[]>([]);
+  const [playlistIdx, setPlaylistIdx] = useState(-1);
+  const [currentTrack, setCurrentTrack] = useState<SmbItem | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isShuffle, setIsShuffle] = useState(false);
+  const [isLoop, setIsLoop] = useState(false);
+  const audioRef = useRef<HTMLAudioElement>(null);
 
   const clone = (g: GS): GS => JSON.parse(JSON.stringify(g));
 
@@ -213,6 +233,99 @@ export const SolitaireGame: React.FC<{ onSecretCode: () => void; onClose?: () =>
     setGs(deal()); setHist([]); setSel(null); setHintId(null); setWon(false);
   }, [trackBtn]);
 
+  // 音楽プレーヤー関数
+  const browseDir = useCallback(async (dir: string) => {
+    setMusicLoading(true);
+    setMusicError('');
+    try {
+      const res = await fetch(apiUrl(`/api/music/browse?path=${encodeURIComponent(dir)}`));
+      const data = await res.json();
+      if (data.success) {
+        setMusicItems(data.items);
+        setCurrentDir(dir);
+        setPlaylist(data.items.filter((i: SmbItem) => i.isAudio));
+      } else {
+        setMusicError(data.error || 'エラー');
+      }
+    } catch (err: any) {
+      setMusicError(err.message || '接続失敗');
+    } finally {
+      setMusicLoading(false);
+    }
+  }, []);
+
+  const handleBrowseDir = (dir: string) => {
+    setDirHistory(h => [...h, currentDir]);
+    browseDir(dir);
+  };
+
+  const handleDirBack = () => {
+    setDirHistory(h => {
+      const prev = [...h];
+      const target = prev.pop() ?? '';
+      browseDir(target);
+      return prev;
+    });
+  };
+
+  const playTrackAt = useCallback((item: SmbItem, idx: number) => {
+    setCurrentTrack(item);
+    setPlaylistIdx(idx);
+    if (audioRef.current) {
+      audioRef.current.src = apiUrl(`/api/music/stream?path=${encodeURIComponent(item.path)}`);
+      audioRef.current.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+    }
+  }, []);
+
+  const handlePlayTrack = (item: SmbItem) => {
+    const idx = playlist.findIndex(p => p.path === item.path);
+    playTrackAt(item, idx >= 0 ? idx : 0);
+  };
+
+  const handlePlayPause = () => {
+    if (!currentTrack) {
+      if (playlist.length > 0) playTrackAt(playlist[0], 0);
+      return;
+    }
+    if (!audioRef.current) return;
+    if (isPlaying) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      audioRef.current.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+    }
+  };
+
+  const handleNext = useCallback(() => {
+    if (playlist.length === 0) return;
+    const nextIdx = isShuffle
+      ? Math.floor(Math.random() * playlist.length)
+      : (playlistIdx + 1) % playlist.length;
+    playTrackAt(playlist[nextIdx], nextIdx);
+  }, [playlist, playlistIdx, isShuffle, playTrackAt]);
+
+  const handlePrev = useCallback(() => {
+    if (playlist.length === 0) return;
+    const prevIdx = playlistIdx <= 0 ? playlist.length - 1 : playlistIdx - 1;
+    playTrackAt(playlist[prevIdx], prevIdx);
+  }, [playlist, playlistIdx, playTrackAt]);
+
+  const handleTrackEnded = useCallback(() => {
+    if (isLoop && audioRef.current) {
+      audioRef.current.currentTime = 0;
+      audioRef.current.play().catch(() => setIsPlaying(false));
+    } else {
+      handleNext();
+    }
+  }, [isLoop, handleNext]);
+
+  // 初回展開時にルートディレクトリを読み込む
+  useEffect(() => {
+    if (musicExpanded && musicItems.length === 0 && !musicLoading && !musicError) {
+      browseDir('');
+    }
+  }, [musicExpanded]);
+
   const renderCard = (card: Card, onClick: () => void, extra: React.CSSProperties = {}) => {
     const isSelected = !!sel?.cards.some(c => c.id === card.id);
     const isHinted = hintId === card.id;
@@ -301,6 +414,22 @@ export const SolitaireGame: React.FC<{ onSecretCode: () => void; onClose?: () =>
         <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, marginLeft: 6 }}>スコア: {score}</span>
       </div>
 
+      {/* ボタンバー（上に配置）: やり直す→ヒント→1枚戻す の順2秒以内でLINEへ */}
+      <div style={{ padding: '4px 10px 2px', background: 'rgba(0,0,0,0.2)', display: 'flex', gap: 6 }}>
+        <button onClick={doRestart} style={btnStyle}>
+          <RotateCcw size={18} />
+          <span style={{ fontSize: 9 }}>最初から</span>
+        </button>
+        <button onClick={doHint} style={{ ...btnStyle, background: hintId ? 'rgba(0,230,118,0.2)' : 'rgba(255,255,255,0.1)' }}>
+          <Lightbulb size={18} />
+          <span style={{ fontSize: 9 }}>ヒント</span>
+        </button>
+        <button onClick={doUndo} style={{ ...btnStyle, opacity: hist.length ? 1 : 0.4 }}>
+          <Undo2 size={18} />
+          <span style={{ fontSize: 9 }}>1枚戻す</span>
+        </button>
+      </div>
+
       {/* 山札・捨て札・ファンデーション */}
       <div style={{ padding: '4px 6px', display: 'flex', alignItems: 'center', gap: 4 }}>
         {/* 山札 */}
@@ -369,20 +498,120 @@ export const SolitaireGame: React.FC<{ onSecretCode: () => void; onClose?: () =>
         </div>
       )}
 
-      {/* ボタンバー: やり直す→ヒント→1枚戻す の順2秒以内でLINEへ */}
-      <div style={{ padding: '8px 10px 20px', background: 'rgba(0,0,0,0.3)', display: 'flex', gap: 8 }}>
-        <button onClick={doRestart} style={btnStyle}>
-          <RotateCcw size={20} />
-          <span style={{ fontSize: 10 }}>最初から</span>
-        </button>
-        <button onClick={doHint} style={{ ...btnStyle, background: hintId ? 'rgba(0,230,118,0.2)' : 'rgba(255,255,255,0.12)' }}>
-          <Lightbulb size={20} />
-          <span style={{ fontSize: 10 }}>ヒント</span>
-        </button>
-        <button onClick={doUndo} style={{ ...btnStyle, opacity: hist.length ? 1 : 0.4 }}>
-          <Undo2 size={20} />
-          <span style={{ fontSize: 10 }}>1枚戻す</span>
-        </button>
+      {/* 音楽プレーヤー（下部固定） */}
+      <div style={{ flexShrink: 0, background: 'rgba(0,0,0,0.5)', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+        {/* ヘッダー: 曲名 + 展開トグル */}
+        <div style={{ padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Music size={15} style={{ color: '#80cbc4', flexShrink: 0 }} />
+          <span style={{
+            flex: 1, color: currentTrack ? '#e0f2f1' : 'rgba(255,255,255,0.4)',
+            fontSize: 11, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
+            {currentTrack ? currentTrack.name : '音楽プレーヤー（タップして展開）'}
+          </span>
+          <button onClick={() => setMusicExpanded(v => !v)} style={{
+            background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.6)',
+            padding: '2px', display: 'flex', alignItems: 'center',
+          }}>
+            {musicExpanded ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
+          </button>
+        </div>
+
+        {/* 再生コントロール */}
+        <div style={{ padding: '0 10px 6px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
+          <button onClick={handlePrev} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', padding: 2 }}>
+            <SkipBack size={18} />
+          </button>
+          <button onClick={handlePlayPause} style={{
+            background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff', cursor: 'pointer',
+            borderRadius: '50%', width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            {isPlaying ? <Pause size={20} /> : <Play size={20} style={{ marginLeft: 2 }} />}
+          </button>
+          <button onClick={handleNext} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', padding: 2 }}>
+            <SkipForward size={18} />
+          </button>
+          <button onClick={() => setIsShuffle(v => !v)} style={{
+            background: 'none', border: 'none', cursor: 'pointer', padding: 2,
+            color: isShuffle ? '#80cbc4' : 'rgba(255,255,255,0.35)',
+          }}>
+            <Shuffle size={16} />
+          </button>
+          <button onClick={() => setIsLoop(v => !v)} style={{
+            background: 'none', border: 'none', cursor: 'pointer', padding: 2,
+            color: isLoop ? '#80cbc4' : 'rgba(255,255,255,0.35)',
+          }}>
+            <Repeat size={16} />
+          </button>
+        </div>
+
+        {/* 展開: フォルダブラウザ */}
+        {musicExpanded && (
+          <div style={{ height: 180, borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column' }}>
+            {/* パスナビ */}
+            <div style={{
+              padding: '3px 8px', display: 'flex', alignItems: 'center', gap: 6,
+              background: 'rgba(0,0,0,0.25)', flexShrink: 0,
+            }}>
+              {dirHistory.length > 0 && (
+                <button onClick={handleDirBack} style={{
+                  background: 'none', border: 'none', color: '#80cbc4', cursor: 'pointer',
+                  padding: '2px 4px', fontSize: 11, fontWeight: 700,
+                }}>← 戻る</button>
+              )}
+              <Folder size={12} style={{ color: '#80cbc4', flexShrink: 0 }} />
+              <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {currentDir || '/ (ルート)'}
+              </span>
+              {musicLoading && <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>読込中...</span>}
+              {musicError && !musicLoading && (
+                <button onClick={() => browseDir(currentDir)} style={{ background: 'none', border: 'none', color: '#ef9a9a', cursor: 'pointer', fontSize: 10 }}>
+                  再試行
+                </button>
+              )}
+            </div>
+
+            {/* ファイルリスト */}
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+              {musicError && !musicLoading && (
+                <div style={{ padding: 10, color: '#ef9a9a', fontSize: 11, textAlign: 'center', lineHeight: 1.5 }}>
+                  接続エラー: {musicError}<br />
+                  <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>SMBホスト: {window.location.hostname}→100.71.203.9</span>
+                </div>
+              )}
+              {!musicError && musicItems.map(item => (
+                <div
+                  key={item.path}
+                  onClick={() => item.isDir ? handleBrowseDir(item.path) : handlePlayTrack(item)}
+                  style={{
+                    padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 8,
+                    cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.04)',
+                    background: currentTrack?.path === item.path ? 'rgba(128,203,196,0.15)' : 'transparent',
+                    WebkitTapHighlightColor: 'transparent',
+                  }}
+                >
+                  <span style={{ fontSize: 13, flexShrink: 0 }}>{item.isDir ? '📁' : '🎵'}</span>
+                  <span style={{
+                    fontSize: 11, color: item.isDir ? '#b2dfdb' : '#e0f2f1',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
+                  }}>
+                    {item.name}
+                  </span>
+                  {!item.isDir && currentTrack?.path === item.path && isPlaying && (
+                    <span style={{ fontSize: 11, color: '#80cbc4', animation: 'pulse 1s infinite' }}>▶</span>
+                  )}
+                </div>
+              ))}
+              {!musicLoading && !musicError && musicItems.length === 0 && (
+                <div style={{ padding: 16, color: 'rgba(255,255,255,0.35)', fontSize: 11, textAlign: 'center' }}>
+                  ファイルなし
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        <audio ref={audioRef} onEnded={handleTrackEnded} style={{ display: 'none' }} />
       </div>
     </div>
   );
