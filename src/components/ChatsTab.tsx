@@ -19,7 +19,16 @@ export const ChatsTab: React.FC<ChatsTabProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
 
-  const filteredRooms = rooms.filter(
+  const friendIds = new Set(currentUser.friendIds || []);
+
+  // 1対1チャットは友達のみ表示（友達削除後は非表示・データは保持）
+  const visibleRooms = rooms.filter((r) => {
+    if (r.isGroup) return true;
+    const partner = r.members.find(m => m.id !== currentUser.id);
+    return !partner || friendIds.has(partner.id);
+  });
+
+  const filteredRooms = visibleRooms.filter(
     (r) =>
       r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (r.lastMessage && r.lastMessage.content.toLowerCase().includes(searchQuery.toLowerCase()))
