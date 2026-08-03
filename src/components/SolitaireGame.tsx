@@ -3,6 +3,7 @@ import { RotateCcw, Lightbulb, Undo2, Trophy, ArrowLeft,
   Music, Play, Pause, SkipBack, SkipForward, Shuffle, Repeat,
   ChevronUp, ChevronDown, Folder } from 'lucide-react';
 import { apiUrl } from '../services/api';
+import { useMusicPlayer } from '../contexts/MusicPlayerContext';
 
 type Suit = 'S' | 'H' | 'D' | 'C';
 interface Card { id: string; suit: Suit; rank: number; faceUp: boolean; }
@@ -108,40 +109,12 @@ export const SolitaireGame: React.FC<{ onSecretCode: () => void; onClose?: () =>
   const seqRef = useRef<BtnId[]>([]);
   const tmRef = useRef<ReturnType<typeof setTimeout>>();
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>();
-  const musicSaveTimerRef = useRef<ReturnType<typeof setTimeout>>();
-
-  // 音楽プレーヤー state（localStorageから復元）
-  const [musicExpanded, setMusicExpanded] = useState<boolean>(() => {
-    try { return JSON.parse(localStorage.getItem('music_state') || '{}').musicExpanded ?? false; } catch { return false; }
-  });
-  const [currentDir, setCurrentDir] = useState<string>(() => {
-    try { return JSON.parse(localStorage.getItem('music_state') || '{}').currentDir ?? ''; } catch { return ''; }
-  });
-  const [dirHistory, setDirHistory] = useState<string[]>(() => {
-    try { return JSON.parse(localStorage.getItem('music_state') || '{}').dirHistory ?? []; } catch { return []; }
-  });
-  const [musicItems, setMusicItems] = useState<SmbItem[]>(() => {
-    try { return JSON.parse(localStorage.getItem('music_state') || '{}').musicItems ?? []; } catch { return []; }
-  });
-  const [musicLoading, setMusicLoading] = useState(false);
-  const [musicError, setMusicError] = useState('');
-  const [playlist, setPlaylist] = useState<SmbItem[]>(() => {
-    try { return JSON.parse(localStorage.getItem('music_state') || '{}').playlist ?? []; } catch { return []; }
-  });
-  const [playlistIdx, setPlaylistIdx] = useState<number>(() => {
-    try { return JSON.parse(localStorage.getItem('music_state') || '{}').playlistIdx ?? -1; } catch { return -1; }
-  });
-  const [currentTrack, setCurrentTrack] = useState<SmbItem | null>(() => {
-    try { return JSON.parse(localStorage.getItem('music_state') || '{}').currentTrack ?? null; } catch { return null; }
-  });
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [isShuffle, setIsShuffle] = useState<boolean>(() => {
-    try { return JSON.parse(localStorage.getItem('music_state') || '{}').isShuffle ?? false; } catch { return false; }
-  });
-  const [isLoop, setIsLoop] = useState<boolean>(() => {
-    try { return JSON.parse(localStorage.getItem('music_state') || '{}').isLoop ?? false; } catch { return false; }
-  });
-  const audioRef = useRef<HTMLAudioElement>(null);
+  const {
+    musicExpanded, setMusicExpanded, currentDir, dirHistory, musicItems,
+    musicLoading, musicError, currentTrack, isPlaying,
+    isShuffle, setIsShuffle, isLoop, setIsLoop,
+    browseDir, handleBrowseDir, handleDirBack, handlePlayTrack, handlePlayPause, handleNext, handlePrev,
+  } = useMusicPlayer();
 
   const clone = (g: GS): GS => JSON.parse(JSON.stringify(g));
 
@@ -262,98 +235,7 @@ export const SolitaireGame: React.FC<{ onSecretCode: () => void; onClose?: () =>
     localStorage.removeItem('sol_hist');
   }, [trackBtn]);
 
-  // 音楽プレーヤー関数
-  const browseDir = useCallback(async (dir: string) => {
-    setMusicLoading(true);
-    setMusicError('');
-    try {
-      const res = await fetch(apiUrl(`/api/music/browse?path=${encodeURIComponent(dir)}`));
-      const data = await res.json();
-      if (data.success) {
-        setMusicItems(data.items);
-        setCurrentDir(dir);
-        setPlaylist(data.items.filter((i: SmbItem) => i.isAudio));
-      } else {
-        setMusicError(data.error || 'エラー');
-      }
-    } catch (err: any) {
-      setMusicError(err.message || '接続失敗');
-    } finally {
-      setMusicLoading(false);
-    }
-  }, []);
 
-  const handleBrowseDir = (dir: string) => {
-    setDirHistory(h => [...h, currentDir]);
-    browseDir(dir);
-  };
-
-  const handleDirBack = () => {
-    setDirHistory(h => {
-      const prev = [...h];
-      const target = prev.pop() ?? '';
-      browseDir(target);
-      return prev;
-    });
-  };
-
-  const playTrackAt = useCallback((item: SmbItem, idx: number) => {
-    setCurrentTrack(item);
-    setPlaylistIdx(idx);
-    if (audioRef.current) {
-      audioRef.current.src = apiUrl(`/api/music/stream?path=${encodeURIComponent(item.path)}`);
-      audioRef.current.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
-    }
-  }, []);
-
-  const handlePlayTrack = (item: SmbItem) => {
-    const idx = playlist.findIndex(p => p.path === item.path);
-    playTrackAt(item, idx >= 0 ? idx : 0);
-  };
-
-  const handlePlayPause = () => {
-    if (!currentTrack) {
-      if (playlist.length > 0) playTrackAt(playlist[0], 0);
-      return;
-    }
-    if (!audioRef.current) return;
-    if (isPlaying) {
-      audioRef.current.pause();
-      setIsPlaying(false);
-    } else {
-      audioRef.current.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
-    }
-  };
-
-  const handleNext = useCallback(() => {
-    if (playlist.length === 0) return;
-    const nextIdx = isShuffle
-      ? Math.floor(Math.random() * playlist.length)
-      : (playlistIdx + 1) % playlist.length;
-    playTrackAt(playlist[nextIdx], nextIdx);
-  }, [playlist, playlistIdx, isShuffle, playTrackAt]);
-
-  const handlePrev = useCallback(() => {
-    if (playlist.length === 0) return;
-    const prevIdx = playlistIdx <= 0 ? playlist.length - 1 : playlistIdx - 1;
-    playTrackAt(playlist[prevIdx], prevIdx);
-  }, [playlist, playlistIdx, playTrackAt]);
-
-  const handleTrackEnded = useCallback(() => {
-    if (isLoop && audioRef.current) {
-      audioRef.current.currentTime = 0;
-      audioRef.current.play().catch(() => setIsPlaying(false));
-    } else {
-      handleNext();
-    }
-  }, [isLoop, handleNext]);
-
-  // 初回展開時にルートディレクトリを読み込む
-  useEffect(() => {
-    if (musicExpanded && musicItems.length === 0 && !musicLoading && !musicError) {
-      browseDir('');
-    }
-  }, [musicExpanded]);
 
   // ゲーム状態を1秒デバウンスで保存
   useEffect(() => {
@@ -367,26 +249,7 @@ export const SolitaireGame: React.FC<{ onSecretCode: () => void; onClose?: () =>
     return () => clearTimeout(saveTimerRef.current);
   }, [gs, hist]);
 
-  // 音楽プレーヤー状態を1秒デバウンスで保存
-  useEffect(() => {
-    clearTimeout(musicSaveTimerRef.current);
-    musicSaveTimerRef.current = setTimeout(() => {
-      try {
-        localStorage.setItem('music_state', JSON.stringify({
-          currentTrack, playlist, playlistIdx, currentDir,
-          musicItems, isShuffle, isLoop, musicExpanded, dirHistory,
-        }));
-      } catch {}
-    }, 1000);
-    return () => clearTimeout(musicSaveTimerRef.current);
-  }, [currentTrack, playlist, playlistIdx, currentDir, musicItems, isShuffle, isLoop, musicExpanded, dirHistory]);
 
-  // 起動時に前回の曲を設定（ブラウザ規制で自動再生は不可、再生ボタンで続きから）
-  useEffect(() => {
-    if (currentTrack && audioRef.current && !audioRef.current.src) {
-      audioRef.current.src = apiUrl(`/api/music/stream?path=${encodeURIComponent(currentTrack.path)}`);
-    }
-  }, []);
 
   const renderCard = (card: Card, onClick: () => void, extra: React.CSSProperties = {}) => {
     const isSelected = !!sel?.cards.some(c => c.id === card.id);
@@ -675,7 +538,6 @@ export const SolitaireGame: React.FC<{ onSecretCode: () => void; onClose?: () =>
           </div>
         )}
 
-        <audio ref={audioRef} onEnded={handleTrackEnded} style={{ display: 'none' }} />
       </div>
     </div>
   );

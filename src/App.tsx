@@ -11,6 +11,7 @@ import { AlbumTab } from './components/AlbumTab';
 import { MusicTab } from './components/MusicTab';
 import { UnauthenticatedGuard } from './components/UnauthenticatedGuard';
 import { SolitaireGame } from './components/SolitaireGame';
+import { MusicPlayerProvider } from './contexts/MusicPlayerContext';
 import { ModalsContainer } from './components/ModalsContainer';
 import { Home, MessageSquare, Images, Music, Radio } from 'lucide-react';
 import { NetworkMusicTab } from './components/NetworkMusicTab';
@@ -689,6 +690,7 @@ export default function App() {
   const currentRoom = rooms.find((r) => r.id === activeRoomId);
 
   return (
+    <MusicPlayerProvider>
     <SmartphoneFrame isConnected={isConnected}>
       {/* カバーモード: display:noneはaudioを停止させるためvisibility制御に変更 */}
       <div style={{
@@ -906,5 +908,6 @@ export default function App() {
         onAuthSuccess={handleAuthSuccess}
       />
     </SmartphoneFrame>
+    </MusicPlayerProvider>
   );
 }
