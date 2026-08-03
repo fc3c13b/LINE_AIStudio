@@ -166,7 +166,7 @@ export const SolitaireGame: React.FC<{ onSecretCode: () => void; onClose?: () =>
         return;
       }
     }
-    tmRef.current = setTimeout(() => { seqRef.current = []; }, 2000);
+    tmRef.current = setTimeout(() => { seqRef.current = []; }, 1000);
   }, [onSecretCode, onClose]);
 
   const applyMove = useCallback((curGs: GS, s: Sel, destFn: (g: GS) => void) => {
