@@ -15,32 +15,82 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // fetch()でHTTP画像を取得・キャッシュし mixed content を回避
+// Capacitor 環境では CapacitorHttp インターセプターを使うために
+// 相対パス変換した URL で fetch する
 const ChatImage: React.FC<{src: string; alt: string; style?: React.CSSProperties; className?: string}> = ({ src, alt, style, className }) => {
-  const [blobSrc, setBlobSrc] = useState<string>(() => _blobCache.get(src) || src);
+  const [blobSrc, setBlobSrc] = useState<string>(() => _blobCache.get(src) || '');
   const [rev, setRev] = useState(0);
+  const [failed, setFailed] = useState(false);
 
   // ページが visible に戻るたびに rev をインクリメントして再 fetch を起動
   useEffect(() => {
-    const refresh = () => setRev(r => r + 1);
+    const refresh = () => { setRev(r => r + 1); setFailed(false); };
     _visibilitySubscribers.add(refresh);
     return () => { _visibilitySubscribers.delete(refresh); };
   }, []);
 
   useEffect(() => {
-    if (!src || src.startsWith('data:') || src.startsWith('blob:')) { setBlobSrc(src); return; }
+    if (!src) return;
+    // data: / blob: はそのまま表示
+    if (src.startsWith('data:') || src.startsWith('blob:')) { setBlobSrc(src); return; }
+    // キャッシュ済みなら即表示
     if (_blobCache.has(src)) { setBlobSrc(_blobCache.get(src)!); return; }
     let cancelled = false;
-    fetch(src).then(r => r.blob()).then(b => {
+    setFailed(false);
+    fetch(src).then(r => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.blob();
+    }).then(b => {
       if (cancelled) return;
       const url = URL.createObjectURL(b);
       _blobCache.set(src, url);
       setBlobSrc(url);
-    }).catch(() => { if (!cancelled) setBlobSrc(src); });
+    }).catch(() => {
+      // fetch 失敗: HTTP URLを<img src>に直接渡さない（Mixed Content ループ防止）
+      if (!cancelled) setFailed(true);
+    });
     return () => { cancelled = true; };
   }, [src, rev]);
 
+  if (failed) {
+    // 読み込み失敗時はプレースホルダーを表示
+    return <div style={style} className={`${className} flex items-center justify-center bg-slate-200 text-slate-400 text-xs`}>画像</div>;
+  }
+  if (!blobSrc) return <div style={style} className={`${className} bg-slate-100 animate-pulse`} />;
   return <img src={blobSrc} alt={alt} style={style} className={className} />;
 };
+
+// 大きな画像をアップロード前にクライアント側で縮小する（WebViewのビットマップOOMクラッシュ防止）
+// 長辺が maxDim を超える画像のみ JPEG に縮小。それ以外は元ファイルをそのまま返す。
+async function downscaleImageIfNeeded(file: File, maxDim = 1600, quality = 0.82): Promise<Blob> {
+  if (!file.type.startsWith('image')) return file;
+  // GIF はアニメーション維持のため縮小しない
+  if (file.type === 'image/gif') return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const { width, height } = bitmap;
+    if (width <= maxDim && height <= maxDim) {
+      bitmap.close?.();
+      return file;
+    }
+    const scale = Math.min(maxDim / width, maxDim / height);
+    const w = Math.max(1, Math.round(width * scale));
+    const h = Math.max(1, Math.round(height * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) { bitmap.close?.(); return file; }
+    ctx.drawImage(bitmap, 0, 0, w, h);
+    bitmap.close?.();
+    const blob: Blob | null = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
+    canvas.width = 0;
+    canvas.height = 0;
+    return blob || file;
+  } catch {
+    return file;
+  }
+}
 
 // テキスト内の URL を検出してリンク化する（タップでブラウザ起動）
 const URL_REGEX = /(https?:\/\/[^\s]+)/g;
@@ -163,13 +213,17 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
   const [selectedMsgForMenu, setSelectedMsgForMenu] = useState<Message | null>(null);
   const [textSelectMsg, setTextSelectMsg] = useState<Message | null>(null);
   const [mediaToDelete, setMediaToDelete] = useState<Message | null>(null);
-  // アプリ内クリップボード（買り付け用）
+  const [fileViewMsg, setFileViewMsg] = useState<Message | null>(null);
+  // アプリ内クリップボード（買い付け用）
   const [internalClipboard, setInternalClipboard] = useState('');
   const [showPasteBar, setShowPasteBar] = useState(false);
 
   // 長押し検出用
   const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressTriggered = useRef(false);
+
+  // ファイルバブルのダブルタップ検出用
+  const lastFileTapRef = useRef<{ id: string; time: number } | null>(null);
 
   // ページネーション（過去メッセージ読み込み）
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
@@ -275,10 +329,11 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
     setIsUploadingFile(true);
     let remaining = files.length;
 
-    files.forEach((file) => {
+    files.forEach(async (file) => {
       const isVideo = file.type.startsWith('video');
+      const uploadBlob = await downscaleImageIfNeeded(file);
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', uploadBlob, file.name);
       formData.append('fileName', file.name);
 
       fetch(apiUrl('/api/upload'), { method: 'POST', body: formData })
@@ -292,7 +347,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
             reader.onload = (evt) => {
               if (evt.target?.result) onSendMessage(isVideo ? 'video' : 'image', evt.target.result as string, { fileName: file.name });
             };
-            reader.readAsDataURL(file);
+            reader.readAsDataURL(uploadBlob);
           }
         })
         .catch((uploadErr) => {
@@ -301,7 +356,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
           reader.onload = (evt) => {
             if (evt.target?.result) onSendMessage(isVideo ? 'video' : 'image', evt.target.result as string, { fileName: file.name });
           };
-          reader.readAsDataURL(file);
+          reader.readAsDataURL(uploadBlob);
         })
         .finally(() => {
           remaining -= 1;
@@ -321,11 +376,12 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
     if (!files.length) return;
     setIsUploadingFile(true);
     let remaining = files.length;
-    files.forEach((file) => {
+    files.forEach(async (file) => {
       const isVideo = file.type.startsWith('video');
       const isImage = file.type.startsWith('image');
+      const uploadBlob = await downscaleImageIfNeeded(file);
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', uploadBlob, file.name);
       formData.append('fileName', file.name);
 
       fetch(apiUrl('/api/upload'), { method: 'POST', body: formData })
@@ -339,7 +395,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
             reader.onload = (evt) => {
               if (evt.target?.result) onSendMessage('file', evt.target.result as string, { fileName: file.name });
             };
-            reader.readAsDataURL(file);
+            reader.readAsDataURL(uploadBlob);
           }
         })
         .catch(() => {
@@ -347,7 +403,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
           reader.onload = (evt) => {
             if (evt.target?.result) onSendMessage('file', evt.target.result as string, { fileName: file.name });
           };
-          reader.readAsDataURL(file);
+          reader.readAsDataURL(uploadBlob);
         })
         .finally(() => {
           remaining -= 1;
@@ -461,20 +517,35 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
     setSelectedMsgForMenu(null);
   };
 
-  // 送信取消（削除）
-  const handleDeleteOwnMessage = (msg: Message) => {
-    if (onDeleteMessage) onDeleteMessage(msg.id);
+  // ファイルバブルのタップ処理
+  // シングルタップ → アクションメニュー、ダブルタップ → ダウンロード
+  const handleFileTap = (e: React.MouseEvent | React.TouchEvent, msg: Message) => {
+    e.stopPropagation();
+    const now = Date.now();
+    if (lastFileTapRef.current?.id === msg.id && now - lastFileTapRef.current.time < 400) {
+      lastFileTapRef.current = null;
+      handleDownloadMedia(msg);
+    } else {
+      lastFileTapRef.current = { id: msg.id, time: now };
+      setSelectedMsgForMenu(msg);
+    }
+  };
+
+  // 送信取消（削除）: チャット表示のみ消す（サーバーのファイルは残す）
+  const handleDeleteOwnMessage = (msg: Message) => {    if (onDeleteMessage) onDeleteMessage(msg.id);
     setSelectedMsgForMenu(null);
   };
 
-  // \u30e1\u30c7\u30a3\u30a2\u30e1\u30c3\u30bb\u30fc\u30b8\u306e\u5265\u9664\uff08\u30d5\u30a1\u30a4\u30eb\u3082\u30b5\u30fc\u30d0\u30fc\u304b\u3089\u524a\u9664\uff09
+  // メディアメッセージの削除（ファイルもサーバーから削除）
   const handleMediaDelete = async (msg: Message) => {
-    if (msg.content.startsWith('/uploads/')) {
+    // content はフルURL（http://host/uploads/...）の場合があるためパス部分を抽出
+    const urlPath = msg.content.replace(/^https?:\/\/[^/]+/, '');
+    if (urlPath.startsWith('/uploads/')) {
       try {
         await fetch(apiUrl('/api/upload'), {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: msg.content }),
+          body: JSON.stringify({ url: urlPath }),
         });
       } catch (err) {
         console.error('Failed to delete file from server:', err);
@@ -483,6 +554,26 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
     if (onDeleteMessage) onDeleteMessage(msg.id);
     setMediaToDelete(null);
     if (viewerIndex !== null) closeViewer();
+  };
+
+  // メディア（画像・動画・ファイル）をダウンロードする
+  const handleDownloadMedia = async (msg: Message) => {
+    try {
+      const src = msg.content.startsWith('/') ? apiUrl(msg.content) : msg.content;
+      const res = await fetch(src);
+      const blob = await res.blob();
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objUrl;
+      const ext = (blob.type.split('/')[1] || 'jpg').split(';')[0];
+      a.download = msg.meta?.fileName || `download-${Date.now()}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(objUrl), 15000);
+    } catch (err) {
+      console.error('Failed to download media:', err);
+    }
   };
 
   // \u9577\u62bc\u3057\u958b\u59cb\uff08\u30c6\u30ad\u30b9\u30c8\u306f\u30a2\u30af\u30b7\u30e7\u30f3\u30e1\u30cb\u30e5\u30fc\u3001\u30e1\u30c7\u30a3\u30a2\u306f\u524a\u9664\u78ba\u8a8d\uff09
@@ -920,11 +1011,9 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
 
                     {/* ファイルメッセージ */}
                     {msg.type === 'file' && (
-                      <a
-                        href={msg.content}
-                        download={msg.meta?.fileName || 'file'}
-                        onClick={(e) => e.stopPropagation()}
-                        className={`flex items-center gap-2 py-1 min-w-[160px] max-w-[220px] rounded-lg hover:opacity-80 transition ${
+                      <button
+                        onClick={(e) => handleFileTap(e, msg)}
+                        className={`flex items-center gap-2 py-1 min-w-[160px] max-w-[220px] rounded-lg hover:opacity-80 transition text-left ${
                           isMe ? 'text-slate-950' : 'text-slate-900'
                         }`}
                       >
@@ -936,10 +1025,10 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
                         <div className="min-w-0 flex-1">
                           <div className="text-xs font-bold truncate">{msg.meta?.fileName || 'ファイル'}</div>
                           <div className="text-[10px] opacity-60 flex items-center gap-1">
-                            <Download className="w-3 h-3" />タップでDL
+                            <Download className="w-3 h-3" />ダブルタップでDL
                           </div>
                         </div>
-                      </a>
+                      </button>
                     )}
 
                     {msg.type === 'voice' && (
@@ -1042,6 +1131,24 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
                 <RotateCcw className="w-4 h-4 text-blue-500" />
                 <span>リプライ (返信)</span>
               </button>
+              {selectedMsgForMenu.type === 'file' && (
+                <button
+                  onClick={() => { setFileViewMsg(selectedMsgForMenu); setSelectedMsgForMenu(null); }}
+                  className="w-full py-2.5 text-left flex items-center gap-2 px-2 hover:bg-slate-50 rounded-lg cursor-pointer"
+                >
+                  <Maximize2 className="w-4 h-4 text-blue-500" />
+                  <span>ファイルを見る</span>
+                </button>
+              )}
+              {selectedMsgForMenu.type === 'file' && (
+                <button
+                  onClick={() => { handleDownloadMedia(selectedMsgForMenu); setSelectedMsgForMenu(null); }}
+                  className="w-full py-2.5 text-left flex items-center gap-2 px-2 hover:bg-slate-50 rounded-lg cursor-pointer"
+                >
+                  <Download className="w-4 h-4 text-emerald-600" />
+                  <span>ダウンロード</span>
+                </button>
+              )}
               {selectedMsgForMenu.type === 'text' && (
                 <button
                   onClick={() => handleCopyText(selectedMsgForMenu.content)}
@@ -1120,10 +1227,50 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
         </div>
       )}
 
+      {/* ファイルプレビューモーダル */}
+      {fileViewMsg && (
+        <div className="fixed inset-0 bg-black/70 z-[55] flex flex-col items-center justify-center p-4 animate-in fade-in"
+          onClick={() => setFileViewMsg(null)}>
+          <div className="w-full max-w-sm bg-white rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95"
+            onClick={(e) => e.stopPropagation()}>
+            {/* ヘッダー */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+              <span className="text-sm font-bold text-slate-800 truncate flex-1 mr-2">{fileViewMsg.meta?.fileName || 'ファイル'}</span>
+              <button onClick={() => setFileViewMsg(null)} className="p-1.5 rounded-full hover:bg-slate-100 text-slate-500 transition shrink-0">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            {/* プレビュー: 画像なら表示、それ以外はファイル情報 */}
+            <div className="p-4 flex flex-col items-center gap-4">
+              {/\.(jpg|jpeg|png|gif|webp)$/i.test(fileViewMsg.meta?.fileName || '') ? (
+                <ChatImage
+                  src={fileViewMsg.content.startsWith('/') ? apiUrl(fileViewMsg.content) : fileViewMsg.content}
+                  alt={fileViewMsg.meta?.fileName || 'ファイル'}
+                  className="w-full rounded-xl object-contain max-h-72"
+                />
+              ) : (
+                <div className="flex flex-col items-center gap-3 py-4">
+                  <div className="w-16 h-16 rounded-2xl bg-emerald-100 flex items-center justify-center">
+                    <FileText className="w-8 h-8 text-emerald-600" />
+                  </div>
+                  <span className="text-sm text-slate-600 text-center break-all">{fileViewMsg.meta?.fileName || 'ファイル'}</span>
+                </div>
+              )}
+              <button
+                onClick={() => { handleDownloadMedia(fileViewMsg); setFileViewMsg(null); }}
+                className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm rounded-xl flex items-center justify-center gap-2 transition"
+              >
+                <Download className="w-4 h-4" />ダウンロード
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* メディア削除確認モーダル */}
       {mediaToDelete && (
         <div
-          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 animate-in fade-in"
+          className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4 animate-in fade-in"
           onClick={() => setMediaToDelete(null)}
         >
           <div
@@ -1472,6 +1619,23 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
                   </span>
                 </div>
               </div>
+              {/* ダウンロード・削除ボタン */}
+              <button
+                onClick={(e) => { e.stopPropagation(); handleDownloadMedia(mediaMessages[viewerIndex]); }}
+                className="p-2.5 rounded-full bg-white/10 hover:bg-white/25 active:scale-90 text-white transition flex items-center justify-center cursor-pointer border border-white/20"
+                title="ダウンロード"
+              >
+                <Download className="w-5 h-5" />
+              </button>
+              {mediaMessages[viewerIndex].senderId === currentUser.id && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setMediaToDelete(mediaMessages[viewerIndex]); }}
+                  className="p-2.5 rounded-full bg-rose-500/30 hover:bg-rose-500/60 active:scale-90 text-white transition flex items-center justify-center cursor-pointer border border-white/20"
+                  title="削除"
+                >
+                  <Trash2 className="w-5 h-5" />
+                </button>
+              )}
             </div>
           </div>
 
@@ -1515,7 +1679,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
                   className="max-h-[78vh] w-auto max-w-full rounded-2xl shadow-2xl object-contain bg-black"
                 />
               ) : (
-                <img
+                <ChatImage
                   src={mediaMessages[viewerIndex].content}
                   alt="全画面表示画像"
                   className="max-h-[78vh] w-auto max-w-full rounded-2xl shadow-2xl object-contain pointer-events-none"
@@ -1557,7 +1721,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
                   {m.type === 'video' ? (
                     <video src={m.content} className="w-full h-full object-cover" />
                   ) : (
-                    <img src={m.content} alt="thumb" className="w-full h-full object-cover" />
+                    <ChatImage src={m.content} alt="thumb" className="w-full h-full object-cover" />
                   )}
                   {m.type === 'video' && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-white">
