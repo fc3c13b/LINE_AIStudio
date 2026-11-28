@@ -328,26 +328,72 @@ const MAX_UPLOAD_BYTES = 50 * 1024 * 1024; // 50MB
 
 app.post('/api/upload', async (req, res) => {
   try {
-    const { fileName, dataUrl, userId } = req.body;
-    if (!dataUrl) {
-      return res.status(400).json({ error: 'dataUrl is required' });
-    }
+    // multipart/form-data（バイナリ直接送信）とapplication/json（Base64）の両方に対応
+    const contentType = req.headers['content-type'] || '';
+    let buffer: Buffer;
+    let mimeType: string;
+    let fileName: string;
+    let userId: string | undefined;
 
-    const matches = dataUrl.match(/^data:(.+);base64,(.+)$/);
-    if (!matches) {
-      return res.status(400).json({ error: 'Invalid dataUrl format' });
-    }
+    if (contentType.includes('multipart/form-data')) {
+      // multipart: Express raw body から境界文字列でパース
+      const boundary = contentType.split('boundary=')[1]?.trim();
+      if (!boundary) return res.status(400).json({ error: 'No boundary in multipart' });
 
-    const mimeType = matches[1].toLowerCase();
-    const base64Data = matches[2];
+      const rawBody = await new Promise<Buffer>((resolve, reject) => {
+        const chunks: Buffer[] = [];
+        req.on('data', (c: Buffer) => chunks.push(c));
+        req.on('end', () => resolve(Buffer.concat(chunks)));
+        req.on('error', reject);
+      });
+
+      // ---- シンプルなマルチパートパーサー ----
+      const boundaryBuf = Buffer.from('--' + boundary);
+      const parts: { headers: string; body: Buffer }[] = [];
+      let pos = 0;
+      while (pos < rawBody.length) {
+        const start = rawBody.indexOf(boundaryBuf, pos);
+        if (start === -1) break;
+        pos = start + boundaryBuf.length;
+        if (rawBody[pos] === 0x2d && rawBody[pos + 1] === 0x2d) break; // '--' = end
+        if (rawBody[pos] === 0x0d) pos += 2; // skip \r\n
+        const headerEnd = rawBody.indexOf(Buffer.from('\r\n\r\n'), pos);
+        if (headerEnd === -1) break;
+        const headerStr = rawBody.slice(pos, headerEnd).toString('utf8');
+        pos = headerEnd + 4;
+        const nextBound = rawBody.indexOf(boundaryBuf, pos);
+        const bodyEnd = nextBound === -1 ? rawBody.length : nextBound - 2; // -2 for \r\n
+        parts.push({ headers: headerStr, body: rawBody.slice(pos, bodyEnd) });
+        pos = nextBound === -1 ? rawBody.length : nextBound;
+      }
+
+      const filePart = parts.find(p => p.headers.includes('name="file"'));
+      const userIdPart = parts.find(p => p.headers.includes('name="userId"'));
+      const fileNamePart = parts.find(p => p.headers.includes('name="fileName"'));
+      if (!filePart) return res.status(400).json({ error: 'No file part in multipart' });
+
+      const ctMatch = filePart.headers.match(/Content-Type:\s*([^\r\n]+)/i);
+      mimeType = ctMatch ? ctMatch[1].trim().toLowerCase() : 'application/octet-stream';
+      buffer = filePart.body;
+      fileName = fileNamePart ? fileNamePart.body.toString('utf8') : 'upload';
+      userId = userIdPart ? userIdPart.body.toString('utf8') : undefined;
+    } else {
+      // application/json (Base64 dataUrl)
+      const { fileName: fn, dataUrl, userId: uid } = req.body;
+      if (!dataUrl) return res.status(400).json({ error: 'dataUrl is required' });
+      const matches = dataUrl.match(/^data:(.+);base64,(.+)$/s);
+      if (!matches) return res.status(400).json({ error: 'Invalid dataUrl format' });
+      mimeType = matches[1].toLowerCase();
+      buffer = Buffer.from(matches[2], 'base64');
+      fileName = fn || 'upload';
+      userId = uid;
+    }
 
     // S-05: MIMEタイプ許可リスト検証
     const ext = ALLOWED_UPLOAD_MIME[mimeType];
     if (!ext) {
       return res.status(415).json({ error: `未対応のファイル形式です: ${mimeType}` });
     }
-
-    const buffer = Buffer.from(base64Data, 'base64');
 
     // S-05: サイズ上限検証
     if (buffer.length > MAX_UPLOAD_BYTES) {

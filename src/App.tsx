@@ -93,17 +93,20 @@ export default function App() {
   useEffect(() => { accountIdRef.current = account?.id; }, [account]);
 
   const [appMode, setAppMode] = useState<'solitaire' | 'line'>('solitaire');
+  const [solitaireKey, setSolitaireKey] = useState(0);
   const [showSolitaire, setShowSolitaire] = useState(false);
 
   // 背面移動時はソリティア画面へ（パスワードロックなし）
-  const lockToSolitaire = () => setAppMode('solitaire');
+  const lockToSolitaire = () => { setAppMode('solitaire'); setSolitaireKey(k => k + 1); };
   const lockTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   // 画面オフ復帰・アイコンタップ復帰ともに即座にソリティアへ
+  // key をインクリメントして SolitaireGame を新規マウント（起動時と同じ状態）
   useEffect(() => {
     const handleVisibilityChange = () => {
       if ((window as any).__filePickerOpen) return;
       setAppMode('solitaire');
+      setSolitaireKey(k => k + 1);
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
@@ -696,10 +699,12 @@ export default function App() {
       <div style={{
         position: 'absolute', inset: 0, zIndex: 50,
         display: 'flex', flexDirection: 'column',
+        height: '100%',
+        overflow: 'hidden',
         visibility: appMode === 'solitaire' ? 'visible' : 'hidden',
         pointerEvents: appMode === 'solitaire' ? 'auto' : 'none',
       }}>
-        <SolitaireGame onSecretCode={() => setAppMode('line')} />
+        <SolitaireGame key={solitaireKey} onSecretCode={() => setAppMode('line')} />
       </div>
 
       {!account ? (

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import pkg from '../../package.json';
 import { User } from '../types';
 import {
   UserCheck,
@@ -457,7 +458,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
 
         {/* バージョン表示 */}
         <div className="text-center py-3 text-[10px] text-slate-400 font-mono">
-          LINE AIStudio v0.7.13
+          LINE AIStudio v{pkg.version}
         </div>
       </div>
     </div>

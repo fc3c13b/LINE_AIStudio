@@ -319,7 +319,7 @@ export const SolitaireGame: React.FC<{ onSecretCode: () => void; onClose?: () =>
 
   return (
     <div style={{
-      flex: 1, minHeight: 0,
+      flex: 1, minHeight: 0, height: 0,
       width: '100%',
       background: 'linear-gradient(160deg,#1b5e20 0%,#2e7d32 60%,#1b5e20 100%)',
       display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative',
@@ -408,22 +408,6 @@ export const SolitaireGame: React.FC<{ onSecretCode: () => void; onClose?: () =>
       <div style={{ flex: 1, overflowY: 'auto', padding: '4px 5px 8px', display: 'flex', gap: 3, alignItems: 'flex-start' }}>
         {gs.tableau.map((col, ci) => renderCol(col, ci))}
       </div>
-
-      {/* クリア画面 */}
-      {won && (
-        <div style={{
-          position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.75)',
-          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 200,
-        }}>
-          <Trophy style={{ color: '#ffd700', width: 64, height: 64, marginBottom: 12 }} />
-          <div style={{ color: '#fff', fontSize: 30, fontWeight: 800 }}>クリア！</div>
-          <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 14, marginTop: 6 }}>スコア: {score}</div>
-          <button onClick={doRestart} style={{
-            marginTop: 28, padding: '12px 36px', borderRadius: 14,
-            background: '#43a047', color: '#fff', fontWeight: 700, fontSize: 16, border: 'none', cursor: 'pointer',
-          }}>もう一度プレイ</button>
-        </div>
-      )}
 
       {/* 音楽プレーヤー（下部固定） */}
       <div style={{ flexShrink: 0, background: 'rgba(0,0,0,0.5)', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
@@ -537,8 +521,23 @@ export const SolitaireGame: React.FC<{ onSecretCode: () => void; onClose?: () =>
             </div>
           </div>
         )}
-
       </div>
+
+      {/* クリア画面 */}
+      {won && (
+        <div style={{
+          position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.75)',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 200,
+        }}>
+          <Trophy style={{ color: '#ffd700', width: 64, height: 64, marginBottom: 12 }} />
+          <div style={{ color: '#fff', fontSize: 30, fontWeight: 800 }}>クリア！</div>
+          <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 14, marginTop: 6 }}>スコア: {score}</div>
+          <button onClick={doRestart} style={{
+            marginTop: 28, padding: '12px 36px', borderRadius: 14,
+            background: '#43a047', color: '#fff', fontWeight: 700, fontSize: 16, border: 'none', cursor: 'pointer',
+          }}>もう一度プレイ</button>
+        </div>
+      )}
     </div>
   );
 };

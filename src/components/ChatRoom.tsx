@@ -1,4 +1,77 @@
 import React, { useState, useEffect, useRef } from 'react';
+
+// モジュールレベルのblobURLキャッシュ（再マウント時も即座に表示）
+const _blobCache = new Map<string, string>();
+
+// visibilitychange で visible に戻ったとき、無効化された blob URL を再 fetch させる仕組み
+// Android WebView はバックグラウンド中に blob データをメモリ解放することがある
+const _visibilitySubscribers = new Set<() => void>();
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    _blobCache.forEach(url => URL.revokeObjectURL(url));
+    _blobCache.clear();
+    _visibilitySubscribers.forEach(fn => fn());
+  }
+});
+
+// fetch()でHTTP画像を取得・キャッシュし mixed content を回避
+const ChatImage: React.FC<{src: string; alt: string; style?: React.CSSProperties; className?: string}> = ({ src, alt, style, className }) => {
+  const [blobSrc, setBlobSrc] = useState<string>(() => _blobCache.get(src) || src);
+  const [rev, setRev] = useState(0);
+
+  // ページが visible に戻るたびに rev をインクリメントして再 fetch を起動
+  useEffect(() => {
+    const refresh = () => setRev(r => r + 1);
+    _visibilitySubscribers.add(refresh);
+    return () => { _visibilitySubscribers.delete(refresh); };
+  }, []);
+
+  useEffect(() => {
+    if (!src || src.startsWith('data:') || src.startsWith('blob:')) { setBlobSrc(src); return; }
+    if (_blobCache.has(src)) { setBlobSrc(_blobCache.get(src)!); return; }
+    let cancelled = false;
+    fetch(src).then(r => r.blob()).then(b => {
+      if (cancelled) return;
+      const url = URL.createObjectURL(b);
+      _blobCache.set(src, url);
+      setBlobSrc(url);
+    }).catch(() => { if (!cancelled) setBlobSrc(src); });
+    return () => { cancelled = true; };
+  }, [src, rev]);
+
+  return <img src={blobSrc} alt={alt} style={style} className={className} />;
+};
+
+// テキスト内の URL を検出してリンク化する（タップでブラウザ起動）
+const URL_REGEX = /(https?:\/\/[^\s]+)/g;
+const URL_TEST = /^https?:\/\/[^\s]+$/;
+function renderTextWithLinks(text: string): React.ReactNode {
+  if (!text) return text;
+  const parts = text.split(URL_REGEX);
+  return parts.map((part, i) => {
+    if (URL_TEST.test(part)) {
+      // 末尾の句読点・閉じ括弧はリンクから除外
+      const match = part.match(/^(.*?)([.,!?)）】」』]*)$/s);
+      const url = match ? match[1] : part;
+      const trailing = match ? match[2] : '';
+      return (
+        <React.Fragment key={i}>
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="underline text-blue-600 break-all"
+          >
+            {url}
+          </a>
+          {trailing}
+        </React.Fragment>
+      );
+    }
+    return <React.Fragment key={i}>{part}</React.Fragment>;
+  });
+}
 import type { ChatRoom as ChatRoomType, Message, User, Sticker } from '../types';
 import { ChatSettings, DEFAULT_CHAT_SETTINGS } from './SettingsTab';
 import { apiUrl } from '../services/api';
@@ -115,8 +188,8 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileInputAllRef = useRef<HTMLInputElement>(null);
-  const openImagePicker = () => { (window as any).__filePickerOpen = true; setTimeout(() => { (window as any).__filePickerOpen = false; }, 60000); openImagePicker(); };
-  const openFilePicker  = () => { (window as any).__filePickerOpen = true; setTimeout(() => { (window as any).__filePickerOpen = false; }, 60000); openFilePicker(); };
+  const openImagePicker = () => { (window as any).__filePickerOpen = true; setTimeout(() => { (window as any).__filePickerOpen = false; }, 60000); fileInputRef.current?.click(); };
+  const openFilePicker  = () => { (window as any).__filePickerOpen = true; setTimeout(() => { (window as any).__filePickerOpen = false; }, 60000); fileInputAllRef.current?.click(); };
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const prevScrollHeightRef = useRef<number>(0);
   const isNearBottomRef = useRef<boolean>(true);
@@ -203,38 +276,40 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
     let remaining = files.length;
 
     files.forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = async (evt) => {
-        if (evt.target?.result) {
-          const dataUrl = evt.target.result as string;
-          const isVideo = file.type.startsWith('video');
+      const isVideo = file.type.startsWith('video');
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('fileName', file.name);
 
-          try {
-            const res = await fetch(apiUrl('/api/upload'), {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ fileName: file.name, dataUrl }),
-            });
-
-            if (res.ok) {
-              const data = await res.json();
-              onSendMessage(isVideo ? 'video' : 'image', data.url, { fileName: file.name, thumbUrl: data.thumbUrl });
-            } else {
-              onSendMessage(isVideo ? 'video' : 'image', dataUrl, { fileName: file.name });
-            }
-          } catch (uploadErr) {
-            console.error('Failed to upload file to server:', uploadErr);
-            onSendMessage(isVideo ? 'video' : 'image', dataUrl, { fileName: file.name });
-          } finally {
-            remaining -= 1;
-            if (remaining <= 0) {
-              setIsUploadingFile(false);
-              setShowPlusMenu(false);
-            }
+      fetch(apiUrl('/api/upload'), { method: 'POST', body: formData })
+        .then(async (res) => {
+          if (res.ok) {
+            const data = await res.json();
+            onSendMessage(isVideo ? 'video' : 'image', apiUrl(data.url), { fileName: file.name, thumbUrl: data.thumbUrl ? apiUrl(data.thumbUrl) : undefined });
+          } else {
+            // フォールバック: dataUrl送信
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+              if (evt.target?.result) onSendMessage(isVideo ? 'video' : 'image', evt.target.result as string, { fileName: file.name });
+            };
+            reader.readAsDataURL(file);
           }
-        }
-      };
-      reader.readAsDataURL(file);
+        })
+        .catch((uploadErr) => {
+          console.error('Failed to upload file to server:', uploadErr);
+          const reader = new FileReader();
+          reader.onload = (evt) => {
+            if (evt.target?.result) onSendMessage(isVideo ? 'video' : 'image', evt.target.result as string, { fileName: file.name });
+          };
+          reader.readAsDataURL(file);
+        })
+        .finally(() => {
+          remaining -= 1;
+          if (remaining <= 0) {
+            setIsUploadingFile(false);
+            setShowPlusMenu(false);
+          }
+        });
     });
 
     e.target.value = '';
@@ -247,30 +322,37 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
     setIsUploadingFile(true);
     let remaining = files.length;
     files.forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = async (evt) => {
-        if (evt.target?.result) {
-          const dataUrl = evt.target.result as string;
-          const isVideo = file.type.startsWith('video');
-          const isImage = file.type.startsWith('image');
-          try {
-            const res = await fetch(apiUrl('/api/upload'), {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ fileName: file.name, dataUrl }),
-            });
-            if (res.ok) {
-              const data = await res.json();
-              const t = isVideo ? 'video' : isImage ? 'image' : 'file';
-              onSendMessage(t, data.url, { fileName: file.name, thumbUrl: data.thumbUrl });
-            } else { onSendMessage('file', dataUrl, { fileName: file.name }); }
-          } catch { onSendMessage('file', dataUrl, { fileName: file.name }); }
-          finally {
-            remaining -= 1;
-            if (remaining <= 0) { setIsUploadingFile(false); setShowPlusMenu(false); }
+      const isVideo = file.type.startsWith('video');
+      const isImage = file.type.startsWith('image');
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('fileName', file.name);
+
+      fetch(apiUrl('/api/upload'), { method: 'POST', body: formData })
+        .then(async (res) => {
+          if (res.ok) {
+            const data = await res.json();
+            const t = isVideo ? 'video' : isImage ? 'image' : 'file';
+            onSendMessage(t, apiUrl(data.url), { fileName: file.name, thumbUrl: data.thumbUrl ? apiUrl(data.thumbUrl) : undefined });
+          } else {
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+              if (evt.target?.result) onSendMessage('file', evt.target.result as string, { fileName: file.name });
+            };
+            reader.readAsDataURL(file);
           }
-        }
-      };
-      reader.readAsDataURL(file);
+        })
+        .catch(() => {
+          const reader = new FileReader();
+          reader.onload = (evt) => {
+            if (evt.target?.result) onSendMessage('file', evt.target.result as string, { fileName: file.name });
+          };
+          reader.readAsDataURL(file);
+        })
+        .finally(() => {
+          remaining -= 1;
+          if (remaining <= 0) { setIsUploadingFile(false); setShowPlusMenu(false); }
+        });
     });
     e.target.value = '';
   };
@@ -683,7 +765,11 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
                           onTouchMove={cancelLongPress}
                           className="overflow-hidden rounded-md cursor-pointer group"
                         >
-                          <img src={img.meta?.thumbUrl || img.content} alt="画像" className="w-full h-auto object-cover max-h-28 group-hover:opacity-90 transition" />
+                          <ChatImage
+                            src={(() => { const u = (img.meta as any)?.thumbUrl || img.content; return u?.startsWith('/') ? apiUrl(u) : u; })()}
+                            alt="画像"
+                            className="w-full h-auto object-cover max-h-28 group-hover:opacity-90 transition"
+                          />
                         </div>
                       ))}
                     </div>
@@ -772,7 +858,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
                       </div>
                     )}
 
-                    {msg.type === 'text' && <p className="whitespace-pre-wrap">{msg.content}</p>}
+                    {msg.type === 'text' && <p className="whitespace-pre-wrap">{renderTextWithLinks(msg.content)}</p>}
 
                     {msg.type === 'sticker' && (
                       <div className="p-0.5">
@@ -788,7 +874,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
                         style={{ maxWidth: chatSettings.maxPhotoHeight }}
                         title="タップして全画面表示"
                       >
-                        <img src={msg.meta?.thumbUrl || msg.content} alt="送信画像"
+                        <ChatImage src={(() => { const u = msg.meta?.thumbUrl || msg.content; return u?.startsWith('/') ? apiUrl(u) : u; })()} alt="送信画像"
                           style={{ maxHeight: chatSettings.maxPhotoHeight }}
                           className="w-full object-cover" />
                         <div className="absolute top-1.5 right-1.5 p-1 rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 transition backdrop-blur-xs">
@@ -972,6 +1058,15 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
                 >
                   <Scissors className="w-4 h-4 text-indigo-500" />
                   <span>部分コピー（テキスト選択）</span>
+                </button>
+              )}
+              {internalClipboard && (
+                <button
+                  onClick={() => { setInputText(prev => prev + internalClipboard); setSelectedMsgForMenu(null); }}
+                  className="w-full py-2.5 text-left flex items-center gap-2 px-2 hover:bg-slate-50 rounded-lg cursor-pointer"
+                >
+                  <ClipboardPaste className="w-4 h-4 text-orange-500" />
+                  <span>貼り付け（入力欄に追加）</span>
                 </button>
               )}
               {selectedMsgForMenu.senderId === currentUser.id && (
